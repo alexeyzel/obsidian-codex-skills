@@ -1,0 +1,100 @@
+# Codex Obsidian Knowledge Skills
+
+This repository contains a generic Codex skill suite and deterministic helper engine for maintaining an Obsidian knowledge vault. The engine must be portable: it should not contain private examples, domain-specific names, or hardcoded knowledge categories beyond what is configured below.
+
+## Folders
+
+Human editing note: keep the `Role` values unchanged. You may change only `Path` values if you want different folder names or another language.
+
+Agent rule: folder roles define behavior. Use paths from this table; do not infer folder paths from hardcoded names.
+
+| Role | Path | Rules |
+|---|---|---|
+| inbox | Inbox | New notes may land here. Do not process notes directly in this folder. |
+| queue | Inbox/Queue | Process notes waiting for ingest. Delete a queue note only after successful ingest and summary application. |
+| meetings | Meetings | Meeting notes are never deleted or renamed. |
+| knowledge | Knowledge | Create and update knowledge notes only under this folder. |
+| fallback | Knowledge/Other | Required fallback folder for processable notes whose type is unclear. |
+| service | Service | Agent state, logs, templates, cache, and other internal files. |
+
+## Knowledge Types
+
+Human editing note: you may change this table. Add, remove, or rename knowledge types as needed. The fallback folder is configured in `Folders`, not here.
+
+Agent rule: use this table as the allowed list of explicit knowledge types. If no type fits but the note is still processable, use the fallback folder.
+
+| Type | Folder | Template | Description |
+|---|---|---|---|
+| person | Knowledge/People | Service/Templates/person.md | One note per person. |
+| organization | Knowledge/Organizations | Service/Templates/organization.md | Companies, institutions, agencies, public bodies, and informal organizations. |
+| project | Knowledge/Projects | Service/Templates/project.md | Projects, programs, grants, and long-running structured efforts. |
+| activity | Knowledge/Activities | Service/Templates/activity.md | Concrete initiatives, contracts, tasks, actions, services, or workstreams. |
+| topic | Knowledge/Topics | Service/Templates/topic.md | General concepts, themes, policy areas, technologies, and reusable ideas. |
+| reference | Knowledge/Reference | Service/Templates/reference.md | Reference material, guidance, reusable instructions, and informational notes. |
+
+## Note Sections
+
+Human editing note: you may change `Heading` values if your templates use another language. Keep `Role` values unchanged.
+
+Agent rule: use placeholders first. If a placeholder is no longer present, find the section by `Heading`. Do not manage sections that are not listed here.
+
+| Role | Heading | Placeholder | Applies to |
+|---|---|---|---|
+| summary | Summary | {agent_summary} | knowledge, meeting |
+| user_notes | My notes | {user_notes} | knowledge |
+
+## Language Policy
+
+Human editing note: you may change `Value` and `Rules` to match your vault. Keep `Setting` values unchanged unless you also update the agent/engine.
+
+Agent rule: use this table when choosing generated prose language, summary language, and new note titles. Preserve proper names and established project names even when the surrounding prose uses another language.
+
+| Setting | Value | Rules |
+|---|---|---|
+| default_content_language | Ukrainian | Use for generated prose unless the source clearly requires another language. |
+| default_summary_language | Ukrainian | Write summaries and meeting preparation context in this language by default. |
+| title_language_policy | natural_source_name | Use the natural/common name from the source; Ukrainian for local Ukrainian people, organizations, activities, and topics; English for foreign people, organizations, and official project names unless an established Ukrainian name is clearly used. |
+| preserve_source_language | yes | Preserve user-authored excerpts, quotes, official titles, acronyms, and mixed-language terms when moving notes into `user_notes`. |
+| do_not_translate_proper_names | yes | Do not translate person names, organization names, project names, product names, acronyms, emails, handles, or official terms. |
+| mixed_language_allowed | yes | Mixed-language titles and summaries are allowed for official names, projects, acronyms, roles, and source-specific terminology. |
+
+## Templates
+
+Human editing note: you may change template paths and template text. Keep required placeholders where the agent should write.
+
+Agent rule: create missing templates during setup. For knowledge notes, `{agent_summary}` and `{user_notes}` are the only required write targets. For meeting notes, only `{agent_summary}` is agent-managed.
+
+| Role | Path | Rules |
+|---|---|---|
+| knowledge_default | Service/Templates/knowledge.md | Used for fallback notes and as a backup when a type template is missing. |
+| meeting | Service/Templates/meeting.md | Used by the meeting preparation skill. |
+
+## Processing Limits
+
+Human editing note: adjust these values for your model context window and vault size.
+
+Agent rule: never silently exceed these limits. If a source cannot fit, leave it unprocessed and add an `Agent note`.
+
+| Setting | Value |
+|---|---|
+| max_llm_input_chars | 60000 |
+| search_candidates | 8 |
+| meeting_prep_context_notes | 5 |
+
+## Operating Rules
+
+- Ingest uses one universal source flow for queue notes and meeting notes.
+- For every source note, inspect the full text, the filename topic, and all wikilinks. Decide which topics have useful transferable knowledge.
+- A source note may create or update zero, one, or many knowledge notes.
+- Resolve target notes before writing: existing note, new note, fallback note, or skip with a reason.
+- If a queue source has an explicit `type` in frontmatter and the type exists in `Knowledge Types`, use that type for the source filename topic when that topic becomes a new note.
+- If a topic type is unclear but the topic is meaningful, write it to the `fallback` folder.
+- Queue notes are disposable only when all useful source content has been transferred or explicitly ignored as non-durable knowledge, all target notes have current summaries, and the action has been logged and indexed.
+- If a queue source cannot be fully processed, append `## Agent note` with a compact reason and keep it in `queue`.
+- Meeting notes are permanent evidence. Never delete or rename them.
+- Process only meeting notes where `agent_processed` is missing or false. After successful processing, set `agent_processed: true`.
+- If a user wants a meeting note processed again, they should set `agent_processed: false`.
+- If a meeting note still contains the configured summary placeholder, write one useful paragraph into it before setting `agent_processed: true`.
+- Source-derived excerpts may be shortened or paraphrased, but they should preserve useful markdown structure.
+- Knowledge summaries must be one high-quality paragraph that captures the important essence of the full updated note.
+- Meeting preparation creates future meeting notes, writes only the summary placeholder, and does not set `agent_processed: true`.

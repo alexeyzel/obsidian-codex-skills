@@ -1,0 +1,22 @@
+[
+  {
+    "name": "init-default-vault",
+    "prompt": "Initialize a new Obsidian vault from AGENTS.md, then show the created folder structure and templates.",
+    "expected_output": "Uses scripts/vault_engine.py init and index, creates configured English folders, service state, and templates without hardcoded private examples."
+  },
+  {
+    "name": "queue-ingest-generic",
+    "prompt": "Process a queue note using the universal source ingest workflow. Identify filename and wikilink topics, preserve useful source content as target updates, write one-paragraph target summaries, and delete the source only after full coverage and current summary state.",
+    "expected_output": "Generates source-shaped queue tasks with language_policy, applies an LLM plan with updates[], applies summaries in the configured summary language, and finalizes queue only after every target summary hash is recorded."
+  },
+  {
+    "name": "meeting-source-ingest-generic",
+    "prompt": "Process a new meeting note using the universal source ingest workflow. Fill the meeting summary placeholder when present, extract useful topic updates, and mark the meeting processed without deleting or renaming it.",
+    "expected_output": "Generates source-shaped meeting tasks with language_policy, applies an LLM plan with source_summary and updates[], creates or updates knowledge targets, and sets agent_processed true only after successful processing."
+  },
+  {
+    "name": "meeting-prep-generic",
+    "prompt": "Create a future meeting note from a calendar title and date using recent relevant vault context.",
+    "expected_output": "Generates a meeting-prep task with language_policy, skips if the target already exists, and creates a meeting note with only the configured summary placeholder filled in the configured summary language."
+  }
+]
