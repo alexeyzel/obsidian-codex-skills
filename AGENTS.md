@@ -25,7 +25,7 @@ Human editing note: you may change this table. Add, remove, or rename knowledge 
 
 Agent rule: use this table as the allowed list of explicit knowledge types. If no type fits but the note is still processable, use the fallback folder.
 
-Path rule: `Folder` is written relative to the configured `knowledge` folder. `Template` is written relative to the configured `service/Templates` folder.
+Path rule: `Folder` is written relative to the configured `knowledge` folder. `Template` is written relative to the directory that contains the `knowledge_default` template.
 
 | Type | Folder | Template | Description |
 |---|---|---|---|

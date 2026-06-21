@@ -13,8 +13,11 @@ AGENTS = ROOT / "AGENTS.md"
 
 class VaultEngineTests(unittest.TestCase):
     def run_engine(self, vault: Path, *args: str) -> dict:
+        command = [sys.executable, str(ENGINE), *args, "--vault", str(vault)]
+        if "--agents" not in args:
+            command.extend(["--agents", str(AGENTS)])
         result = subprocess.run(
-            [sys.executable, str(ENGINE), *args, "--vault", str(vault), "--agents", str(AGENTS)],
+            command,
             cwd=ROOT,
             text=True,
             encoding="utf-8",
@@ -57,7 +60,10 @@ class VaultEngineTests(unittest.TestCase):
                 next(item["value"] for item in tasks["language_policy"] if item["setting"] == "default_summary_language"),
                 "English",
             )
-            self.assertEqual({item["topic"] for item in tasks["tasks"][0]["topic_candidates"]}, {"Composite source", "Alpha Project", "Beta Topic"})
+            self.assertEqual(
+                {item["topic"] for item in tasks["tasks"][0]["topic_candidates"]},
+                {"Composite source", "Alpha Project", "Beta Topic"},
+            )
 
             plan_file = vault / "plan.json"
             self.write_json(
@@ -223,12 +229,12 @@ class VaultEngineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
             agents_text = AGENTS.read_text(encoding="utf-8")
-            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Вхідні |")
-            agents_text = agents_text.replace("| queue | Queue |", "| queue | Черга |")
-            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | Знання |")
-            agents_text = agents_text.replace("| fallback | Other |", "| fallback | Інше |")
-            agents_text = agents_text.replace("| service | Service |", "| service | Службове |")
-            agents_text = agents_text.replace("| person | People |", "| person | Люди |")
+            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Inbox |")
+            agents_text = agents_text.replace("| queue | Queue |", "| queue | QueueCustom |")
+            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | KnowledgeCustom |")
+            agents_text = agents_text.replace("| fallback | Other |", "| fallback | OtherCustom |")
+            agents_text = agents_text.replace("| service | Service |", "| service | ServiceCustom |")
+            agents_text = agents_text.replace("| person | People |", "| person | PeopleCustom |")
             local_agents = vault / "AGENTS.md"
             local_agents.write_text(agents_text, encoding="utf-8")
 
@@ -243,21 +249,21 @@ class VaultEngineTests(unittest.TestCase):
             )
             payload = json.loads(result.stdout)
 
-            self.assertIn("_Вхідні/Черга", payload["created_or_checked"])
-            self.assertIn("Знання/Інше", payload["created_or_checked"])
-            self.assertIn("Знання/Люди", payload["created_or_checked"])
-            self.assertTrue((vault / "Службове" / "Templates" / "person.md").exists())
-            self.assertFalse((vault / "Службове" / "Templates" / "Service").exists())
+            self.assertIn("_Inbox/QueueCustom", payload["created_or_checked"])
+            self.assertIn("KnowledgeCustom/OtherCustom", payload["created_or_checked"])
+            self.assertIn("KnowledgeCustom/PeopleCustom", payload["created_or_checked"])
+            self.assertTrue((vault / "ServiceCustom" / "Templates" / "person.md").exists())
+            self.assertFalse((vault / "ServiceCustom" / "Templates" / "Service").exists())
 
     def test_legacy_full_paths_follow_renamed_role_roots(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
             agents_text = AGENTS.read_text(encoding="utf-8")
-            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Вхідні |")
+            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Inbox |")
             agents_text = agents_text.replace("| queue | Queue |", "| queue | Inbox/Queue |")
-            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | Знання |")
+            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | KnowledgeCustom |")
             agents_text = agents_text.replace("| fallback | Other |", "| fallback | Knowledge/Other |")
-            agents_text = agents_text.replace("| service | Service |", "| service | Службове |")
+            agents_text = agents_text.replace("| service | Service |", "| service | ServiceCustom |")
             agents_text = agents_text.replace("| person | People |", "| person | Knowledge/People |")
             agents_text = agents_text.replace("| person.md |", "| Service/Templates/person.md |")
             local_agents = vault / "AGENTS.md"
@@ -274,12 +280,58 @@ class VaultEngineTests(unittest.TestCase):
             )
             payload = json.loads(result.stdout)
 
-            self.assertIn("_Вхідні/Queue", payload["created_or_checked"])
-            self.assertIn("Знання/Other", payload["created_or_checked"])
-            self.assertIn("Знання/People", payload["created_or_checked"])
-            self.assertTrue((vault / "Службове" / "Templates" / "person.md").exists())
-            self.assertFalse((vault / "_Вхідні" / "Inbox" / "Queue").exists())
-            self.assertFalse((vault / "Знання" / "Knowledge" / "People").exists())
+            self.assertIn("_Inbox/Queue", payload["created_or_checked"])
+            self.assertIn("KnowledgeCustom/Other", payload["created_or_checked"])
+            self.assertIn("KnowledgeCustom/People", payload["created_or_checked"])
+            self.assertTrue((vault / "ServiceCustom" / "Templates" / "person.md").exists())
+            self.assertFalse((vault / "_Inbox" / "Inbox" / "Queue").exists())
+            self.assertFalse((vault / "KnowledgeCustom" / "Knowledge" / "People").exists())
+
+    def test_type_templates_follow_configured_template_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            agents_text = AGENTS.read_text(encoding="utf-8")
+            agents_text = agents_text.replace("| service | Service |", "| service | _Service |")
+            agents_text = agents_text.replace("| knowledge_default | Templates/knowledge.md |", "| knowledge_default | Tmpl/knowledge.md |")
+            agents_text = agents_text.replace("| meeting | Templates/meeting.md |", "| meeting | Tmpl/meeting.md |")
+            agents_text = agents_text.replace("| person.md |", "| Service/Templates/person.md |")
+            local_agents = vault / "AGENTS.md"
+            local_agents.write_text(agents_text, encoding="utf-8")
+
+            self.run_engine(vault, "init", "--agents", str(local_agents))
+
+            self.assertTrue((vault / "_Service" / "Tmpl" / "knowledge.md").exists())
+            self.assertTrue((vault / "_Service" / "Tmpl" / "meeting.md").exists())
+            self.assertTrue((vault / "_Service" / "Tmpl" / "person.md").exists())
+            self.assertFalse((vault / "_Service" / "Templates" / "person.md").exists())
+
+    def test_reinit_adds_new_type_without_removing_old_type_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            local_agents = vault / "AGENTS.md"
+            local_agents.write_text(AGENTS.read_text(encoding="utf-8"), encoding="utf-8")
+
+            self.run_engine(vault, "init", "--agents", str(local_agents))
+            old_folder = vault / "Knowledge" / "Reference"
+            self.assertTrue(old_folder.exists())
+
+            agents_text = local_agents.read_text(encoding="utf-8")
+            agents_text = agents_text.replace(
+                "| reference | Reference | reference.md | Reference material, guidance, reusable instructions, and informational notes. |\n",
+                "",
+            )
+            agents_text = agents_text.replace(
+                "| topic | Topics | topic.md | General concepts, themes, policy areas, technologies, and reusable ideas. |",
+                "| topic | Topics | topic.md | General concepts, themes, policy areas, technologies, and reusable ideas. |\n"
+                "| decision | Decisions | decision.md | Durable decisions and rationale. |",
+            )
+            local_agents.write_text(agents_text, encoding="utf-8")
+
+            self.run_engine(vault, "init", "--agents", str(local_agents))
+
+            self.assertTrue((vault / "Knowledge" / "Decisions").exists())
+            self.assertTrue((vault / "Service" / "Templates" / "decision.md").exists())
+            self.assertTrue(old_folder.exists())
 
 
 if __name__ == "__main__":

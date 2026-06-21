@@ -38,12 +38,12 @@ Paths are intentionally parent-aware so a human does not have to repeat root fol
 - `queue` is relative to `inbox`;
 - `fallback` is relative to `knowledge`;
 - knowledge type folders are relative to `knowledge`;
-- knowledge type templates are relative to `service/Templates`;
+- knowledge type templates are relative to the directory that contains `knowledge_default`;
 - template paths are relative to `service`.
 
 For example, changing `knowledge` from `Knowledge` to `Знання` automatically makes `Folder = People` resolve to `Знання/People`.
 
-Old-style full paths such as `Knowledge/People` or `Service/Templates/person.md` are also accepted; if the root role is renamed, default prefixes are treated as aliases for the current configured root.
+Old-style full paths such as `Knowledge/People` or `Service/Templates/person.md` are also accepted; if the root role or template directory is renamed, default prefixes are treated as aliases for the current configured location.
 
 The Python engine only performs mechanics:
 

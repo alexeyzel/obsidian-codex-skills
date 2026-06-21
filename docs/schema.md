@@ -33,7 +33,7 @@ The fallback folder is not a knowledge type. It is used when a note is meaningfu
 
 `Folder` values in `Knowledge Types` are resolved inside the configured `knowledge` folder. For example, if `knowledge = Knowledge`, then `Folder = People` becomes `Knowledge/People`. This keeps folder renaming in one place. Old-style `Knowledge/People` is also accepted and follows a renamed `knowledge` root.
 
-`Template` values in `Knowledge Types` are resolved inside `service/Templates` unless they already start with the configured service path. For example, `Template = person.md` becomes `Service/Templates/person.md`. Old-style `Service/Templates/person.md` is also accepted and follows a renamed `service` root.
+`Template` values in `Knowledge Types` are resolved inside the directory that contains the configured `knowledge_default` template unless they already start with the configured service path. For example, if `knowledge_default = Templates/knowledge.md`, then `Template = person.md` becomes `Service/Templates/person.md`; if `knowledge_default = Шаблони/knowledge.md`, then `Template = person.md` becomes `Service/Шаблони/person.md`. Old-style `Service/Templates/person.md` is also accepted and follows the configured template directory.
 
 ## Sections
 

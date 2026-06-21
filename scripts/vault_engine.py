@@ -15,7 +15,7 @@ import re
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -147,6 +147,11 @@ def config_join(parent: str, child: str, legacy_parent: str | None = None) -> st
         if legacy_suffix is not None:
             return config_join(parent_norm, legacy_suffix)
     return f"{parent_norm}/{child_norm}"
+
+
+def config_parent(path: str) -> str:
+    parent = str(PurePosixPath(normalize_config_path(path)).parent)
+    return "" if parent == "." else normalize_config_path(parent)
 
 
 def split_table_row(line: str) -> list[str]:
@@ -286,21 +291,48 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
             )
         folders[role] = FolderSpec(role=role, path=folder_path, rules=folder.rules)
 
-    service_templates_root = config_join(folders["service"].path, "Templates")
+    default_templates_root = config_join(folders["service"].path, "Templates")
 
-    def resolve_knowledge_folder(value: str) -> str:
-        return config_join(folders["knowledge"].path, value, legacy_parent=DEFAULT_ROLE_PATHS["knowledge"])
-
-    def resolve_template(value: str) -> str:
+    def resolve_service_path(value: str) -> str:
         template_path = normalize_config_path(value)
         if config_path_is_within(template_path, folders["service"].path):
             return template_path
         legacy_service_suffix = strip_config_prefix(template_path, DEFAULT_ROLE_PATHS["service"])
         if legacy_service_suffix is not None:
             return config_join(folders["service"].path, legacy_service_suffix)
-        if config_path_is_within(template_path, "Templates"):
-            return config_join(folders["service"].path, template_path)
-        return config_join(service_templates_root, template_path)
+        return config_join(folders["service"].path, template_path)
+
+    raw_templates: dict[str, TemplateSpec] = {}
+    for row in parse_markdown_table(text, "Templates"):
+        role = normalize_key(row.get("role", ""))
+        template_path = normalize_config_path(row.get("path", ""))
+        if role and template_path:
+            raw_templates[role] = TemplateSpec(role=role, path=resolve_service_path(template_path), rules=row.get("rules", ""))
+    raw_templates.setdefault(
+        "knowledge_default",
+        TemplateSpec("knowledge_default", config_join(default_templates_root, "knowledge.md"), "Fallback knowledge template."),
+    )
+    raw_templates.setdefault("meeting", TemplateSpec("meeting", config_join(default_templates_root, "meeting.md"), "Meeting template."))
+
+    knowledge_template_root = config_parent(raw_templates["knowledge_default"].path) or default_templates_root
+
+    def resolve_knowledge_folder(value: str) -> str:
+        return config_join(folders["knowledge"].path, value, legacy_parent=DEFAULT_ROLE_PATHS["knowledge"])
+
+    def resolve_type_template(value: str) -> str:
+        template_path = normalize_config_path(value)
+        if config_path_is_within(template_path, folders["service"].path):
+            return template_path
+        legacy_service_suffix = strip_config_prefix(template_path, DEFAULT_ROLE_PATHS["service"])
+        if legacy_service_suffix is not None:
+            legacy_templates_suffix = strip_config_prefix(legacy_service_suffix, "Templates")
+            if legacy_templates_suffix is not None:
+                return config_join(knowledge_template_root, legacy_templates_suffix)
+            return config_join(folders["service"].path, legacy_service_suffix)
+        templates_suffix = strip_config_prefix(template_path, "Templates")
+        if templates_suffix is not None:
+            return config_join(knowledge_template_root, templates_suffix)
+        return config_join(knowledge_template_root, template_path)
 
     types: dict[str, TypeSpec] = {}
     for row in parse_markdown_table(text, "Knowledge Types"):
@@ -309,7 +341,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
         template = normalize_config_path(row.get("template", ""))
         if note_type and folder:
             folder = resolve_knowledge_folder(folder)
-            template = resolve_template(template) if template else ""
+            template = resolve_type_template(template) if template else ""
             types[note_type] = TypeSpec(
                 type=note_type,
                 folder=folder,
@@ -343,19 +375,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
     if not language_policy:
         language_policy = default_language_policy()
 
-    templates: dict[str, TemplateSpec] = {}
-    for row in parse_markdown_table(text, "Templates"):
-        role = normalize_key(row.get("role", ""))
-        template_path = normalize_config_path(row.get("path", ""))
-        if role and template_path:
-            template_path = resolve_template(template_path)
-            templates[role] = TemplateSpec(role=role, path=template_path, rules=row.get("rules", ""))
-
-    templates.setdefault(
-        "knowledge_default",
-        TemplateSpec("knowledge_default", resolve_template("knowledge.md"), "Fallback knowledge template."),
-    )
-    templates.setdefault("meeting", TemplateSpec("meeting", resolve_template("meeting.md"), "Meeting template."))
+    templates = raw_templates
 
     limits = {
         "max_llm_input_chars": 60000,
