@@ -8,14 +8,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / "scripts" / "vault_engine.py"
-AGENTS = ROOT / "AGENTS.md"
+CONFIG = ROOT / "Config.md"
 
 
 class VaultEngineTests(unittest.TestCase):
     def run_engine(self, vault: Path, *args: str) -> dict:
         command = [sys.executable, str(ENGINE), *args, "--vault", str(vault)]
-        if "--agents" not in args:
-            command.extend(["--agents", str(AGENTS)])
+        if "--config" not in args:
+            command.extend(["--config", str(CONFIG)])
         result = subprocess.run(
             command,
             cwd=ROOT,
@@ -220,21 +220,21 @@ class VaultEngineTests(unittest.TestCase):
             )
 
             prep_task = self.run_engine(vault, "meeting-prep-task", "--calendar-title", "DIA Support", "--date", "2026-06-22")
-            self.assertNotIn("title_style", {item["setting"] for item in prep_task["language_policy"]})
+            self.assertFalse(any(item["setting"].startswith("title") for item in prep_task["language_policy"]))
             self.assertTrue(any("natural/common name" in rule for rule in prep_task["operating_rules"]))
 
     def test_relative_config_paths_are_resolved_from_role_roots(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
-            agents_text = AGENTS.read_text(encoding="utf-8")
-            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Inbox |")
-            agents_text = agents_text.replace("| queue | Queue |", "| queue | QueueCustom |")
-            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | KnowledgeCustom |")
-            agents_text = agents_text.replace("| fallback | Other |", "| fallback | OtherCustom |")
-            agents_text = agents_text.replace("| service | Service |", "| service | ServiceCustom |")
-            agents_text = agents_text.replace("| person | People |", "| person | PeopleCustom |")
-            local_agents = vault / "AGENTS.md"
-            local_agents.write_text(agents_text, encoding="utf-8")
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("| inbox | Inbox |", "| inbox | _Inbox |")
+            config_text = config_text.replace("| queue | Queue |", "| queue | QueueCustom |")
+            config_text = config_text.replace("| knowledge | Knowledge |", "| knowledge | KnowledgeCustom |")
+            config_text = config_text.replace("| fallback | Other |", "| fallback | OtherCustom |")
+            config_text = config_text.replace("| service | Service |", "| service | ServiceCustom |")
+            config_text = config_text.replace("| person | People |", "| person | PeopleCustom |")
+            local_config = vault / "Config.md"
+            local_config.write_text(config_text, encoding="utf-8")
 
             result = subprocess.run(
                 [sys.executable, str(ENGINE), "init", "--vault", str(vault)],
@@ -253,23 +253,16 @@ class VaultEngineTests(unittest.TestCase):
             self.assertTrue((vault / "ServiceCustom" / "Templates" / "person.md").exists())
             self.assertFalse((vault / "ServiceCustom" / "Templates" / "Service").exists())
 
-    def test_legacy_full_paths_follow_renamed_role_roots(self) -> None:
+    def test_vault_config_is_default_config_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
-            agents_text = AGENTS.read_text(encoding="utf-8")
-            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Inbox |")
-            agents_text = agents_text.replace("| queue | Queue |", "| queue | Inbox/Queue |")
-            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | KnowledgeCustom |")
-            agents_text = agents_text.replace("| fallback | Other |", "| fallback | Knowledge/Other |")
-            agents_text = agents_text.replace("| service | Service |", "| service | ServiceCustom |")
-            agents_text = agents_text.replace("| person | People |", "| person | Knowledge/People |")
-            agents_text = agents_text.replace("| person.md |", "| Service/Templates/person.md |")
-            local_agents = vault / "AGENTS.md"
-            local_agents.write_text(agents_text, encoding="utf-8")
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("| inbox | Inbox |", "| inbox | VaultInbox |")
+            (vault / "Config.md").write_text(config_text, encoding="utf-8")
 
             result = subprocess.run(
                 [sys.executable, str(ENGINE), "init", "--vault", str(vault)],
-                cwd=ROOT,
+                cwd=vault,
                 text=True,
                 encoding="utf-8",
                 stdout=subprocess.PIPE,
@@ -278,25 +271,21 @@ class VaultEngineTests(unittest.TestCase):
             )
             payload = json.loads(result.stdout)
 
-            self.assertIn("_Inbox/Queue", payload["created_or_checked"])
-            self.assertIn("KnowledgeCustom/Other", payload["created_or_checked"])
-            self.assertIn("KnowledgeCustom/People", payload["created_or_checked"])
-            self.assertTrue((vault / "ServiceCustom" / "Templates" / "person.md").exists())
-            self.assertFalse((vault / "_Inbox" / "Inbox" / "Queue").exists())
-            self.assertFalse((vault / "KnowledgeCustom" / "Knowledge" / "People").exists())
+            self.assertEqual(Path(payload["config"]), (vault / "Config.md").resolve())
+            self.assertTrue((vault / "VaultInbox").exists())
+            self.assertFalse((vault / "Inbox").exists())
 
     def test_type_templates_follow_configured_template_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
-            agents_text = AGENTS.read_text(encoding="utf-8")
-            agents_text = agents_text.replace("| service | Service |", "| service | _Service |")
-            agents_text = agents_text.replace("| knowledge_default | Templates/knowledge.md |", "| knowledge_default | Tmpl/knowledge.md |")
-            agents_text = agents_text.replace("| meeting | Templates/meeting.md |", "| meeting | Tmpl/meeting.md |")
-            agents_text = agents_text.replace("| person.md |", "| Service/Templates/person.md |")
-            local_agents = vault / "AGENTS.md"
-            local_agents.write_text(agents_text, encoding="utf-8")
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("| service | Service |", "| service | _Service |")
+            config_text = config_text.replace("| knowledge_default | Templates/knowledge.md |", "| knowledge_default | Tmpl/knowledge.md |")
+            config_text = config_text.replace("| meeting | Templates/meeting.md |", "| meeting | Tmpl/meeting.md |")
+            local_config = vault / "Config.md"
+            local_config.write_text(config_text, encoding="utf-8")
 
-            self.run_engine(vault, "init", "--agents", str(local_agents))
+            self.run_engine(vault, "init", "--config", str(local_config))
 
             self.assertTrue((vault / "_Service" / "Tmpl" / "knowledge.md").exists())
             self.assertTrue((vault / "_Service" / "Tmpl" / "meeting.md").exists())
@@ -306,16 +295,16 @@ class VaultEngineTests(unittest.TestCase):
     def test_meeting_template_uses_configured_meeting_section_headings(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
-            agents_text = AGENTS.read_text(encoding="utf-8")
-            agents_text = agents_text.replace("| summary | Summary | {agent_summary} |", "| summary | Brief | {agent_summary} |")
-            agents_text = agents_text.replace("| user_notes | My notes | {user_notes} |", "| user_notes | Notes | {user_notes} |")
-            agents_text = agents_text.replace("| related | Related |  |", "| related | Context |  |")
-            agents_text = agents_text.replace("| before | Before |", "| before | Before Call |")
-            agents_text = agents_text.replace("| after | After |", "| after | Follow Up |")
-            local_agents = vault / "AGENTS.md"
-            local_agents.write_text(agents_text, encoding="utf-8")
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("| summary | Summary | {agent_summary} |", "| summary | Brief | {agent_summary} |")
+            config_text = config_text.replace("| user_notes | My notes | {user_notes} |", "| user_notes | Notes | {user_notes} |")
+            config_text = config_text.replace("| related | Related |  |", "| related | Context |  |")
+            config_text = config_text.replace("| before | Before |", "| before | Before Call |")
+            config_text = config_text.replace("| after | After |", "| after | Follow Up |")
+            local_config = vault / "Config.md"
+            local_config.write_text(config_text, encoding="utf-8")
 
-            self.run_engine(vault, "init", "--agents", str(local_agents))
+            self.run_engine(vault, "init", "--config", str(local_config))
 
             meeting_template = (vault / "Service" / "Templates" / "meeting.md").read_text(encoding="utf-8")
             self.assertIn("## Brief\n{agent_summary}", meeting_template)
@@ -331,26 +320,26 @@ class VaultEngineTests(unittest.TestCase):
     def test_reinit_adds_new_type_without_removing_old_type_folder(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
-            local_agents = vault / "AGENTS.md"
-            local_agents.write_text(AGENTS.read_text(encoding="utf-8"), encoding="utf-8")
+            local_config = vault / "Config.md"
+            local_config.write_text(CONFIG.read_text(encoding="utf-8"), encoding="utf-8")
 
-            self.run_engine(vault, "init", "--agents", str(local_agents))
+            self.run_engine(vault, "init", "--config", str(local_config))
             old_folder = vault / "Knowledge" / "Reference"
             self.assertTrue(old_folder.exists())
 
-            agents_text = local_agents.read_text(encoding="utf-8")
-            agents_text = agents_text.replace(
+            config_text = local_config.read_text(encoding="utf-8")
+            config_text = config_text.replace(
                 "| reference | Reference | reference.md | Reference material, guidance, reusable instructions, and informational notes. |\n",
                 "",
             )
-            agents_text = agents_text.replace(
+            config_text = config_text.replace(
                 "| topic | Topics | topic.md | General concepts, themes, policy areas, technologies, and reusable ideas. |",
                 "| topic | Topics | topic.md | General concepts, themes, policy areas, technologies, and reusable ideas. |\n"
                 "| decision | Decisions | decision.md | Durable decisions and rationale. |",
             )
-            local_agents.write_text(agents_text, encoding="utf-8")
+            local_config.write_text(config_text, encoding="utf-8")
 
-            self.run_engine(vault, "init", "--agents", str(local_agents))
+            self.run_engine(vault, "init", "--config", str(local_config))
 
             self.assertTrue((vault / "Knowledge" / "Decisions").exists())
             self.assertTrue((vault / "Service" / "Templates" / "decision.md").exists())

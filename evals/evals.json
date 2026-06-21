@@ -1,7 +1,7 @@
 [
   {
     "name": "init-default-vault",
-    "prompt": "Initialize a new Obsidian vault from AGENTS.md, then show the created folder structure and templates.",
+    "prompt": "Initialize a new Obsidian vault from Config.md, then show the created folder structure and templates.",
     "expected_output": "Uses scripts/vault_engine.py init and index, creates configured English folders, service state, and templates without hardcoded private examples."
   },
   {

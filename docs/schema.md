@@ -1,8 +1,10 @@
 # Schema
 
-The schema is configured in `AGENTS.md`, not in Python.
+The schema is configured in `Config.md`, not in Python.
 
 ## Folders
+
+In the default `Config.md`, folder labels live under `Language and Labels` because changing the vault language usually means changing these paths.
 
 Folder roles are stable. Paths are configurable. The required roles are:
 
@@ -18,7 +20,7 @@ Folder roles are stable. Paths are configurable. The required roles are:
 - `queue` is resolved inside `inbox`, so `queue = Queue` becomes `Inbox/Queue`.
 - `fallback` is resolved inside `knowledge`, so `fallback = Other` becomes `Knowledge/Other`.
 
-Full old-style paths such as `Inbox/Queue` and `Knowledge/Other` are still accepted. If you rename a root folder, old default prefixes `Inbox`, `Knowledge`, and `Service` are treated as aliases for the current configured roots.
+Prefer child folder names for `queue` and `fallback`. If you change the parent folder path, these child paths follow it automatically.
 
 ## Knowledge Types
 
@@ -31,11 +33,13 @@ Knowledge types are user-configurable rows in the `Knowledge Types` table. Each 
 
 The fallback folder is not a knowledge type. It is used when a note is meaningful but no configured type fits.
 
-`Folder` values in `Knowledge Types` are resolved inside the configured `knowledge` folder. For example, if `knowledge = Knowledge`, then `Folder = People` becomes `Knowledge/People`. This keeps folder renaming in one place. Old-style `Knowledge/People` is also accepted and follows a renamed `knowledge` root.
+`Folder` values in `Knowledge Types` are resolved inside the configured `knowledge` folder. For example, if `knowledge = Knowledge`, then `Folder = People` becomes `Knowledge/People`. This keeps folder renaming in one place.
 
-`Template` values in `Knowledge Types` are resolved inside the directory that contains the configured `knowledge_default` template unless they already start with the configured service path. For example, if `knowledge_default = Templates/knowledge.md`, then `Template = person.md` becomes `Service/Templates/person.md`; if `knowledge_default = Шаблони/knowledge.md`, then `Template = person.md` becomes `Service/Шаблони/person.md`. Old-style `Service/Templates/person.md` is also accepted and follows the configured template directory.
+`Template` values in `Knowledge Types` are resolved inside the directory that contains the configured `knowledge_default` template unless they already start with the configured service path. For example, if `knowledge_default = Templates/knowledge.md`, then `Template = person.md` becomes `Service/Templates/person.md`; if `knowledge_default = TemplatesUa/knowledge.md`, then `Template = person.md` becomes `Service/TemplatesUa/person.md`.
 
 ## Sections
+
+In the default `Config.md`, note and meeting section labels live under `Language and Labels`.
 
 The engine manages only configured note section roles:
 
@@ -53,7 +57,7 @@ The optional `Meeting Sections` table configures static headings used when the e
 Supported roles:
 
 - `before`;
-- `after`;
+- `after`.
 
 The meeting notes section follows the configured `user_notes` heading from `Note Sections`. The related section follows the configured `related` heading from `Note Sections`. If the `Meeting Sections` table is missing, the engine uses English defaults for `before` and `after`.
 
@@ -84,9 +88,9 @@ Important task fields:
 - `topic_candidates`: filename topic plus wikilinks, each with candidate targets;
 - `candidate_targets`: source-level retrieval candidates;
 - `source_text`: full source text unless it exceeds the configured limit;
-- `has_summary_placeholder`: meeting-only flag.
-- `language_policy`: task-level language rules.
-- `operating_rules`: task-level behavior rules from `AGENTS.md`.
+- `has_summary_placeholder`: meeting-only flag;
+- `language_policy`: task-level language rules;
+- `operating_rules`: task-level behavior rules from `Config.md`.
 
 The LLM returns actions:
 
@@ -134,4 +138,4 @@ Meeting templates should include:
 {agent_summary}
 ```
 
-Users may rename headings or change template layout as long as `AGENTS.md` points the engine to the right section names.
+Users may rename headings or change template layout as long as `Config.md` points the engine to the right section names.

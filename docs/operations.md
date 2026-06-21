@@ -60,6 +60,8 @@ Uninstall removes only this suite's installed skill folders and installed runtim
 ## Setup
 
 ```bash
+cp Config.md /path/to/vault/Config.md
+# Edit /path/to/vault/Config.md before init if needed.
 python "$ENGINE" init --vault /path/to/vault
 python "$ENGINE" index --vault /path/to/vault
 ```

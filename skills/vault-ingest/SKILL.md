@@ -5,7 +5,7 @@ description: Process Obsidian queue notes and unprocessed meeting notes into con
 
 # Vault Ingest
 
-Read `AGENTS.md` and `skills/vault-rules/SKILL.md`.
+Read vault `Config.md` and `skills/vault-rules/SKILL.md`.
 
 Resolve `ENGINE` to the installed engine at `${CODEX_HOME:-$HOME/.codex}/obsidian-knowledge-skills/scripts/vault_engine.py`. If working from a repository checkout, local `scripts/vault_engine.py` is also valid.
 

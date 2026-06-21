@@ -6,7 +6,7 @@ The project is built around one principle: the vault stays human-readable, while
 
 ## What It Does
 
-- Initializes a vault from a human-readable `AGENTS.md` contract.
+- Initializes a vault from a human-readable `Config.md` contract.
 - Processes inbox queue notes and meeting notes through one universal source-ingest flow.
 - Creates preparation notes for future meetings from recent relevant context.
 - Keeps summaries short, useful, and editable.
@@ -22,9 +22,9 @@ The project is built around one principle: the vault stays human-readable, while
 
 ## Core Idea
 
-`AGENTS.md` is the vault contract. It is Markdown, not YAML, so a human can read and edit it comfortably.
+`Config.md` is the vault contract. It is Markdown, not YAML, so a human can read and edit it comfortably.
 
-The engine reads tables from `AGENTS.md`:
+The engine reads tables from `Config.md`:
 
 - `Folders`: required folder roles and their paths.
 - `Knowledge Types`: user-defined knowledge categories.
@@ -42,9 +42,7 @@ Paths are intentionally parent-aware so a human does not have to repeat root fol
 - knowledge type templates are relative to the directory that contains `knowledge_default`;
 - template paths are relative to `service`.
 
-For example, changing `knowledge` from `Knowledge` to `Знання` automatically makes `Folder = People` resolve to `Знання/People`.
-
-Old-style full paths such as `Knowledge/People` or `Service/Templates/person.md` are also accepted; if the root role or template directory is renamed, default prefixes are treated as aliases for the current configured location.
+For example, changing `knowledge` from `Knowledge` to `KnowledgeBase` automatically makes `Folder = People` resolve to `KnowledgeBase/People`.
 
 The Python engine only performs mechanics:
 
@@ -68,7 +66,8 @@ The LLM performs semantic work:
 ## Repository Layout
 
 ```text
-AGENTS.md                 # vault contract and default schema
+AGENTS.md                 # repository development instructions
+Config.md                 # default vault contract and schema
 scripts/
   vault_engine.py         # deterministic file engine
 skills/
@@ -110,7 +109,7 @@ Rules:
 Knowledge notes use two agent-managed areas:
 
 - a summary section, normally `## Summary`;
-- a user-notes section, normally `## My Notes`.
+- a user-notes section, normally `## My notes`.
 
 Templates mark insertion points with:
 
@@ -119,7 +118,7 @@ Templates mark insertion points with:
 {user_notes}
 ```
 
-Existing notes do not need to keep those placeholders. After first write, the engine finds sections by the headings configured in `AGENTS.md`.
+Existing notes do not need to keep those placeholders. After first write, the engine finds sections by the headings configured in `Config.md`.
 
 Templates also include a manual related section by default. It has no placeholder, so the agent does not populate it automatically.
 
@@ -152,6 +151,8 @@ $engine = Join-Path $codexHome "obsidian-knowledge-skills\scripts\vault_engine.p
 Initialize a vault:
 
 ```bash
+cp Config.md /path/to/vault/Config.md
+# Edit /path/to/vault/Config.md before init if you want different language, folders, sections, or knowledge types.
 python "$ENGINE" init --vault /path/to/vault
 ```
 
@@ -224,7 +225,7 @@ The installer copies:
 - skill directories into `$CODEX_HOME/skills`;
 - runtime files into `$CODEX_HOME/obsidian-knowledge-skills`.
 
-It does not modify an existing production vault. Vault configuration lives in that vault's own `AGENTS.md`.
+It does not modify an existing production vault. Vault configuration lives in that vault's own `Config.md`.
 
 ## Updating
 
@@ -270,5 +271,5 @@ Uninstall removes only this suite's installed skill folders and `$CODEX_HOME/obs
 
 - `docs/architecture.md`: engine and skill responsibilities.
 - `docs/method.md`: human-first vault method.
-- `docs/schema.md`: `AGENTS.md` table contract and JSON plan shapes.
+- `docs/schema.md`: `Config.md` table contract and JSON plan shapes.
 - `docs/operations.md`: practical command sequences.

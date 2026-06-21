@@ -20,7 +20,7 @@ done
 rm -rf "$RUNTIME_DIR"
 mkdir -p "$RUNTIME_DIR/scripts"
 cp "$SCRIPT_DIR/scripts/vault_engine.py" "$RUNTIME_DIR/scripts/"
-cp "$SCRIPT_DIR/AGENTS.md" "$RUNTIME_DIR/"
+cp "$SCRIPT_DIR/Config.md" "$RUNTIME_DIR/"
 
 {
   printf '{\n'

@@ -6,7 +6,7 @@ The system has two layers.
 
 `scripts/vault_engine.py` performs file mechanics only:
 
-- parse Markdown tables from `AGENTS.md`;
+- parse Markdown tables from `Config.md`;
 - create configured folders and templates;
 - scan Markdown files and build a rebuildable cache;
 - generate universal source JSON tasks for LLM planning;
@@ -31,20 +31,22 @@ Codex skills perform semantic work:
 
 ## Configuration
 
-`AGENTS.md` is the configuration contract. It is intentionally Markdown, not YAML. The engine reads tables under:
+`Config.md` is the vault configuration contract. It is intentionally Markdown, not YAML. The default file groups user-facing labels under `Language and Labels`, and the engine reads tables by heading:
 
 - `Folders`;
 - `Knowledge Types`;
 - `Note Sections`;
+- `Meeting Sections`;
 - `Language Policy`;
 - `Templates`;
-- `Processing Limits`.
+- `Processing Limits`;
+- `Operating Rules`.
 
 Users may change paths, templates, section headings, limits, and knowledge types without editing Python.
 
 ## Service State
 
-The service folder is configured in `AGENTS.md`. The engine creates internal subfolders:
+The service folder is configured in `Config.md`. The engine creates internal subfolders:
 
 ```text
 Service/

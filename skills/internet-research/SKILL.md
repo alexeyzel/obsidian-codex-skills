@@ -7,7 +7,7 @@ description: Manually research public internet sources for an Obsidian note or t
 
 This skill is manual. Do not run it during normal ingest unless the user explicitly asks.
 
-Use `AGENTS.md` for folder and section configuration. The deterministic engine does not perform web research.
+Use vault `Config.md` for folder and section configuration. The deterministic engine does not perform web research.
 
 Research rules:
 

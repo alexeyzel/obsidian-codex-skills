@@ -5,12 +5,12 @@ description: Shared rules for the generic Obsidian vault maintainer. Use when an
 
 # Vault Rules
 
-Read `AGENTS.md` first. Treat it as the vault contract.
+Read vault `Config.md` first. Treat it as the vault contract.
 
 Core rules:
 
-- Use folder roles and paths from `AGENTS.md`; do not hardcode folder names.
-- Use configured knowledge types from `AGENTS.md`; do not hardcode type names.
+- Use folder roles and paths from `Config.md`; do not hardcode folder names.
+- Use configured knowledge types from `Config.md`; do not hardcode type names.
 - Follow configured `Language Policy` for generated prose and summaries.
 - Follow configured `Operating Rules` for new note titles.
 - Preserve proper names, official names, acronyms, emails, and established mixed-language names.

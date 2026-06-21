@@ -2,7 +2,7 @@
 """Generic Obsidian vault engine for Codex skills.
 
 The engine is intentionally deterministic and domain-agnostic. It reads vault
-roles, knowledge types, sections, templates, and limits from AGENTS.md Markdown
+roles, knowledge types, sections, templates, and limits from Config.md Markdown
 tables, then performs file mechanics around LLM decisions.
 """
 
@@ -67,7 +67,7 @@ class TemplateSpec:
 
 @dataclass
 class VaultSpec:
-    agents_path: Path
+    config_path: Path
     folders: dict[str, FolderSpec]
     types: dict[str, TypeSpec]
     sections: dict[str, SectionSpec]
@@ -128,20 +128,7 @@ def config_path_is_within(path: str, parent: str) -> bool:
     return path_norm == parent_norm or path_norm.startswith(parent_norm + "/")
 
 
-DEFAULT_ROLE_PATHS = {"inbox": "Inbox", "knowledge": "Knowledge", "service": "Service"}
-
-
-def strip_config_prefix(path: str, prefix: str) -> str | None:
-    path_norm = normalize_config_path(path)
-    prefix_norm = normalize_config_path(prefix)
-    if path_norm == prefix_norm:
-        return ""
-    if path_norm.startswith(prefix_norm + "/"):
-        return path_norm[len(prefix_norm) + 1 :]
-    return None
-
-
-def config_join(parent: str, child: str, legacy_parent: str | None = None) -> str:
+def config_join(parent: str, child: str) -> str:
     parent_norm = normalize_config_path(parent)
     child_norm = normalize_config_path(child)
     if not parent_norm:
@@ -150,10 +137,6 @@ def config_join(parent: str, child: str, legacy_parent: str | None = None) -> st
         return parent_norm
     if config_path_is_within(child_norm, parent_norm):
         return child_norm
-    if legacy_parent:
-        legacy_suffix = strip_config_prefix(child_norm, legacy_parent)
-        if legacy_suffix is not None:
-            return config_join(parent_norm, legacy_suffix)
     return f"{parent_norm}/{child_norm}"
 
 
@@ -189,9 +172,16 @@ def split_table_row(line: str) -> list[str]:
 
 
 def extract_markdown_section(markdown: str, heading: str) -> str:
-    pattern = re.compile(rf"(?ms)^##\s+{re.escape(heading)}\s*\n(.*?)(?=^##\s+|\Z)")
+    pattern = re.compile(rf"(?m)^(?P<marks>#{{2,6}})\s+{re.escape(heading)}\s*$")
     match = pattern.search(markdown)
-    return match.group(1).strip() if match else ""
+    if not match:
+        return ""
+    level = len(match.group("marks"))
+    body_start = match.end()
+    next_pattern = re.compile(rf"(?m)^#{{1,{level}}}\s+")
+    next_match = next_pattern.search(markdown, body_start)
+    body_end = next_match.start() if next_match else len(markdown)
+    return markdown[body_start:body_end].strip()
 
 
 def parse_markdown_table(markdown: str, heading: str) -> list[dict[str, str]]:
@@ -219,20 +209,20 @@ def parse_markdown_bullets(markdown: str, heading: str) -> list[str]:
     return bullets
 
 
-def resolve_agents_path(vault: Path, supplied: str | None) -> Path:
+def resolve_config_path(vault: Path, supplied: str | None) -> Path:
     candidates: list[Path] = []
     if supplied:
         candidates.append(Path(supplied))
-    candidates.append(vault / "AGENTS.md")
-    candidates.append(Path.cwd() / "AGENTS.md")
-    candidates.append(Path(__file__).resolve().parent.parent / "AGENTS.md")
+    candidates.append(vault / "Config.md")
+    candidates.append(Path.cwd() / "Config.md")
+    candidates.append(Path(__file__).resolve().parent.parent / "Config.md")
     for candidate in candidates:
         candidate = candidate.expanduser()
         if candidate.exists():
             return candidate.resolve()
     raise FileNotFoundError(
-        "Could not find AGENTS.md. Pass --agents, add AGENTS.md to the vault, "
-        "or install the runtime with the bundled default AGENTS.md."
+        "Could not find Config.md. Pass --config, add Config.md to the vault, "
+        "or install the runtime with the bundled default Config.md."
     )
 
 
@@ -274,8 +264,8 @@ def default_language_policy() -> list[dict[str, str]]:
     ]
 
 
-def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
-    path = resolve_agents_path(vault, agents_path)
+def load_spec(vault: Path, config_path: str | None = None) -> VaultSpec:
+    path = resolve_config_path(vault, config_path)
     text = read_text(path)
 
     raw_folders: dict[str, FolderSpec] = {}
@@ -286,7 +276,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
             raw_folders[role] = FolderSpec(role=role, path=folder_path, rules=row.get("rules", ""))
     missing = REQUIRED_FOLDER_ROLES - set(raw_folders)
     if missing:
-        raise ValueError(f"AGENTS.md is missing required folder roles: {', '.join(sorted(missing))}")
+        raise ValueError(f"Config.md is missing required folder roles: {', '.join(sorted(missing))}")
 
     folders: dict[str, FolderSpec] = {}
     nested_folder_roles = {"queue": "inbox", "fallback": "knowledge"}
@@ -294,11 +284,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
         folder_path = folder.path
         parent_role = nested_folder_roles.get(role)
         if parent_role:
-            folder_path = config_join(
-                raw_folders[parent_role].path,
-                folder_path,
-                legacy_parent=DEFAULT_ROLE_PATHS.get(parent_role),
-            )
+            folder_path = config_join(raw_folders[parent_role].path, folder_path)
         folders[role] = FolderSpec(role=role, path=folder_path, rules=folder.rules)
 
     default_templates_root = config_join(folders["service"].path, "Templates")
@@ -307,9 +293,6 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
         template_path = normalize_config_path(value)
         if config_path_is_within(template_path, folders["service"].path):
             return template_path
-        legacy_service_suffix = strip_config_prefix(template_path, DEFAULT_ROLE_PATHS["service"])
-        if legacy_service_suffix is not None:
-            return config_join(folders["service"].path, legacy_service_suffix)
         return config_join(folders["service"].path, template_path)
 
     raw_templates: dict[str, TemplateSpec] = {}
@@ -327,21 +310,12 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
     knowledge_template_root = config_parent(raw_templates["knowledge_default"].path) or default_templates_root
 
     def resolve_knowledge_folder(value: str) -> str:
-        return config_join(folders["knowledge"].path, value, legacy_parent=DEFAULT_ROLE_PATHS["knowledge"])
+        return config_join(folders["knowledge"].path, value)
 
     def resolve_type_template(value: str) -> str:
         template_path = normalize_config_path(value)
         if config_path_is_within(template_path, folders["service"].path):
             return template_path
-        legacy_service_suffix = strip_config_prefix(template_path, DEFAULT_ROLE_PATHS["service"])
-        if legacy_service_suffix is not None:
-            legacy_templates_suffix = strip_config_prefix(legacy_service_suffix, "Templates")
-            if legacy_templates_suffix is not None:
-                return config_join(knowledge_template_root, legacy_templates_suffix)
-            return config_join(folders["service"].path, legacy_service_suffix)
-        templates_suffix = strip_config_prefix(template_path, "Templates")
-        if templates_suffix is not None:
-            return config_join(knowledge_template_root, templates_suffix)
         return config_join(knowledge_template_root, template_path)
 
     types: dict[str, TypeSpec] = {}
@@ -373,7 +347,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
             sections[role] = SectionSpec(role=role, heading=heading, placeholder=placeholder, applies_to=applies)
     for role in ("summary", "user_notes"):
         if role not in sections:
-            raise ValueError(f"AGENTS.md is missing required Note Sections role: {role}")
+            raise ValueError(f"Config.md is missing required Note Sections role: {role}")
     sections.setdefault("related", SectionSpec(role="related", heading="Related", placeholder="", applies_to=("knowledge", "meeting")))
 
     meeting_sections: dict[str, MeetingSectionSpec] = {
@@ -809,7 +783,7 @@ def rebuild_index(vault: Path, spec: VaultSpec) -> dict[str, Any]:
 
 def cmd_init(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     created: list[str] = []
     for folder in spec.folders.values():
         path = vault / folder.path
@@ -839,20 +813,20 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     write_json(state_path(vault, spec, "queue.json"), load_json(state_path(vault, spec, "queue.json"), {}))
     write_json(state_path(vault, spec, "summaries.json"), load_json(state_path(vault, spec, "summaries.json"), {}))
-    print(json.dumps({"created_or_checked": sorted(set(created)), "agents": str(spec.agents_path)}, ensure_ascii=False, indent=2))
+    print(json.dumps({"created_or_checked": sorted(set(created)), "config": str(spec.config_path)}, ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_index(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     print(json.dumps(rebuild_index(vault, spec), ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_search(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     results = candidate_search(vault, spec, args.query, knowledge_only=not args.all, limit=args.limit)
     print(json.dumps(results, ensure_ascii=False, indent=2))
     return 0
@@ -927,7 +901,7 @@ def build_source_task(vault: Path, spec: VaultSpec, source: Path, *, source_kind
 
 def cmd_queue_tasks(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     queue = folder_path(vault, spec, "queue")
     tasks: list[dict[str, Any]] = []
     for source in sorted(queue.glob("*.md")) if queue.exists() else []:
@@ -975,7 +949,7 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
 
 def cmd_meeting_tasks(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     meetings = folder_path(vault, spec, "meetings")
     tasks: list[dict[str, Any]] = []
     for source in sorted(meetings.glob("*.md")) if meetings.exists() else []:
@@ -1200,7 +1174,7 @@ def apply_source_action(vault: Path, spec: VaultSpec, action: dict[str, Any], to
 
 def cmd_apply_plan(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     payload = load_json(Path(args.input), {})
     actions = payload.get("actions", payload if isinstance(payload, list) else [])
     applied: list[dict[str, Any]] = []
@@ -1233,7 +1207,7 @@ def cmd_apply_plan(args: argparse.Namespace) -> int:
 
 def cmd_summary_tasks(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     state = load_json(state_path(vault, spec, "summaries.json"), {})
     tasks: list[dict[str, Any]] = []
     for path in sorted(folder_path(vault, spec, "knowledge").rglob("*.md")):
@@ -1275,7 +1249,7 @@ def cmd_summary_tasks(args: argparse.Namespace) -> int:
 
 def cmd_apply_summaries(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     payload = load_json(Path(args.input), {})
     summaries = payload.get("summaries", payload if isinstance(payload, list) else [])
     state_file = state_path(vault, spec, "summaries.json")
@@ -1309,7 +1283,7 @@ def cmd_apply_summaries(args: argparse.Namespace) -> int:
 
 def cmd_finalize_queue(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     queue_state_file = state_path(vault, spec, "queue.json")
     queue_state = load_json(queue_state_file, {})
     summaries = load_json(state_path(vault, spec, "summaries.json"), {})
@@ -1326,8 +1300,8 @@ def cmd_finalize_queue(args: argparse.Namespace) -> int:
             continue
         targets = record.get("targets", [])
         if not isinstance(targets, list):
-            legacy_target = str(record.get("target", "")).strip()
-            targets = [legacy_target] if legacy_target else []
+            skipped.append({"source": source_rel, "reason": "invalid target records"})
+            continue
         targets = [str(item).strip() for item in targets if str(item).strip()]
         if not targets:
             skipped.append({"source": source_rel, "reason": "no target records"})
@@ -1358,7 +1332,7 @@ def cmd_finalize_queue(args: argparse.Namespace) -> int:
 
 def cmd_meeting_prep_task(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     filename_title = sanitize_filename(args.calendar_title)
     prefix = args.date if not args.time else f"{args.date} {args.time.replace(':', '-')}"
     target = folder_path(vault, spec, "meetings") / f"{prefix} - {filename_title}.md"
@@ -1400,7 +1374,7 @@ def cmd_meeting_prep_task(args: argparse.Namespace) -> int:
 
 def cmd_apply_meeting_prep(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
-    spec = load_spec(vault, args.agents)
+    spec = load_spec(vault, args.config)
     payload = load_json(Path(args.input), {})
     target_rel = str(payload.get("target_path", "")).strip()
     if not target_rel:
@@ -1442,8 +1416,8 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--vault", required=True)
         p.add_argument(
-            "--agents",
-            help="Path to AGENTS.md. Defaults to vault/AGENTS.md, then ./AGENTS.md, then runtime default.",
+            "--config",
+            help="Path to Config.md. Defaults to vault/Config.md, then ./Config.md, then runtime default.",
         )
 
     p = sub.add_parser("init", help="create configured folders, templates, and service state")

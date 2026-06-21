@@ -22,7 +22,7 @@ if (Test-Path -LiteralPath $runtimeDir) {
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $runtimeDir "scripts") | Out-Null
 Copy-Item -Path (Join-Path $scriptDir "scripts\vault_engine.py") -Destination (Join-Path $runtimeDir "scripts") -Force
-Copy-Item -Path (Join-Path $scriptDir "AGENTS.md") -Destination $runtimeDir -Force
+Copy-Item -Path (Join-Path $scriptDir "Config.md") -Destination $runtimeDir -Force
 
 $manifest = [ordered]@{
     name = "codex-obsidian-knowledge-skills"

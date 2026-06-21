@@ -1,11 +1,11 @@
 ---
 name: vault-setup
-description: Initialize a new Obsidian vault from the Markdown configuration in AGENTS.md. Use when the user wants to create vault folders, service state, templates, or prepare a vault for Codex CLI/n8n maintenance.
+description: Initialize a new Obsidian vault from the Markdown configuration in Config.md. Use when the user wants to create vault folders, service state, templates, or prepare a vault for Codex CLI/n8n maintenance.
 ---
 
 # Vault Setup
 
-Use `AGENTS.md` as the configuration source.
+Use vault `Config.md` as the configuration source.
 
 Resolve `ENGINE` to the installed engine at `${CODEX_HOME:-$HOME/.codex}/obsidian-knowledge-skills/scripts/vault_engine.py`. If working from a repository checkout, local `scripts/vault_engine.py` is also valid.
 
