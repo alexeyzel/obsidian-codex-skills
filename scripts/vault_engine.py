@@ -73,6 +73,7 @@ class VaultSpec:
     sections: dict[str, SectionSpec]
     meeting_sections: dict[str, MeetingSectionSpec]
     language_policy: list[dict[str, str]]
+    operating_rules: list[str]
     templates: dict[str, TemplateSpec]
     limits: dict[str, int]
 
@@ -208,6 +209,16 @@ def parse_markdown_table(markdown: str, heading: str) -> list[dict[str, str]]:
     return rows
 
 
+def parse_markdown_bullets(markdown: str, heading: str) -> list[str]:
+    section = extract_markdown_section(markdown, heading)
+    bullets: list[str] = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            bullets.append(stripped[2:].strip())
+    return bullets
+
+
 def resolve_agents_path(vault: Path, supplied: str | None) -> Path:
     candidates: list[Path] = []
     if supplied:
@@ -244,14 +255,6 @@ def default_language_policy() -> list[dict[str, str]]:
             "setting": "default_summary_language",
             "value": "English",
             "rules": "Write summaries and meeting preparation context in this language by default.",
-        },
-        {
-            "setting": "title_style",
-            "value": "short natural title",
-            "rules": (
-                "Use the natural/common source name or explicit target title. Do not translate proper names. "
-                "Prefer short readable titles over formal registry names unless the formal name is the common name."
-            ),
         },
         {
             "setting": "preserve_source_language",
@@ -392,6 +395,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
             language_policy.append({"setting": setting, "value": value, "rules": rules})
     if not language_policy:
         language_policy = default_language_policy()
+    operating_rules = parse_markdown_bullets(text, "Operating Rules")
 
     templates = raw_templates
 
@@ -405,7 +409,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
         if setting:
             limits[setting] = parse_int(row.get("value", ""), limits.get(setting, 1))
 
-    return VaultSpec(path, folders, types, sections, meeting_sections, language_policy, templates, limits)
+    return VaultSpec(path, folders, types, sections, meeting_sections, language_policy, operating_rules, templates, limits)
 
 
 def folder_path(vault: Path, spec: VaultSpec, role: str) -> Path:
@@ -940,10 +944,11 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
             "not reclassify that topic. For linked topics, choose a configured type, fallback, or skip. "
             "Set coverage to complete only when all useful source content is represented in updates "
             "or explicitly ignored as not durable knowledge. Otherwise set coverage to partial or skipped "
-            "with a compact reason. Follow language_policy when choosing target titles and generated prose. "
-            "Do not create relationship links."
+            "with a compact reason. Follow operating_rules when choosing target titles. Follow "
+            "language_policy for generated prose. Do not create relationship links."
         ),
         "language_policy": spec.language_policy,
+        "operating_rules": spec.operating_rules,
         "action_schema": {
             "kind": "source",
             "source": "Inbox/Queue/example.md",
@@ -989,10 +994,12 @@ def cmd_meeting_tasks(args: argparse.Namespace) -> int:
             "return updates. Meeting notes are never deleted or renamed. If has_summary_placeholder is "
             "true, also return source_summary as one useful paragraph for the meeting itself. Return an "
             "update only when source text clearly belongs to that topic. The notes_markdown may be "
-            "shortened or paraphrased, but preserve useful Markdown structure. Follow language_policy when "
-            "choosing target titles and generated prose. Do not create relationship links."
+            "shortened or paraphrased, but preserve useful Markdown structure. Follow operating_rules "
+            "when choosing target titles. Follow language_policy for generated prose. Do not create "
+            "relationship links."
         ),
         "language_policy": spec.language_policy,
+        "operating_rules": spec.operating_rules,
         "action_schema": {
             "kind": "source",
             "source": "Meetings/example.md",
@@ -1379,6 +1386,7 @@ def cmd_meeting_prep_task(args: argparse.Namespace) -> int:
             "Return {\"target_path\":\"...\",\"summary\":\"...\"}."
         ),
         "language_policy": spec.language_policy,
+        "operating_rules": spec.operating_rules,
         "exists": target.exists(),
         "target_path": rel_to(vault, target),
         "calendar_title": args.calendar_title,

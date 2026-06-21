@@ -220,10 +220,8 @@ class VaultEngineTests(unittest.TestCase):
             )
 
             prep_task = self.run_engine(vault, "meeting-prep-task", "--calendar-title", "DIA Support", "--date", "2026-06-22")
-            self.assertEqual(
-                next(item["value"] for item in prep_task["language_policy"] if item["setting"] == "title_style"),
-                "short natural title",
-            )
+            self.assertNotIn("title_style", {item["setting"] for item in prep_task["language_policy"]})
+            self.assertTrue(any("natural/common name" in rule for rule in prep_task["operating_rules"]))
 
     def test_relative_config_paths_are_resolved_from_role_roots(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

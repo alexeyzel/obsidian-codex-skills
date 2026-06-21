@@ -59,7 +59,7 @@ The meeting notes section follows the configured `user_notes` heading from `Note
 
 ## Language Policy
 
-The optional `Language Policy` table configures generated prose language, summary language, and title naming behavior. If the table is missing, the engine uses an English-by-default fallback policy.
+The optional `Language Policy` table configures generated prose language and summary language. If the table is missing, the engine uses an English-by-default fallback policy.
 
 Each row has:
 
@@ -67,9 +67,9 @@ Each row has:
 - `Value`;
 - `Rules`.
 
-`Value` is intentionally human-readable policy text, not a strict enum. For example, `title_style = short natural title` tells the LLM how to choose new note titles.
+The engine emits `language_policy` in source ingest tasks, summary tasks, and meeting preparation tasks. LLM plans should follow it when writing generated prose, summaries, and preserving proper names.
 
-The engine emits `language_policy` in source ingest tasks, summary tasks, and meeting preparation tasks. LLM plans should follow it when choosing new note titles, writing generated summaries, and preserving proper names.
+Title naming belongs to `Operating Rules`, not `Language Policy`. Source ingest and meeting preparation tasks also emit `operating_rules`.
 
 ## Source Task Schema
 
@@ -85,7 +85,8 @@ Important task fields:
 - `candidate_targets`: source-level retrieval candidates;
 - `source_text`: full source text unless it exceeds the configured limit;
 - `has_summary_placeholder`: meeting-only flag.
-- `language_policy`: task-level language and naming rules.
+- `language_policy`: task-level language rules.
+- `operating_rules`: task-level behavior rules from `AGENTS.md`.
 
 The LLM returns actions:
 

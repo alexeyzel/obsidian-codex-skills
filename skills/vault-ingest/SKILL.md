@@ -16,7 +16,8 @@ Queue notes and meeting notes use the same JSON action shape. The commands diffe
 For every task:
 
 - read the full `source_text`;
-- follow `language_policy` for generated prose, summaries, and target titles;
+- follow `language_policy` for generated prose and summaries;
+- follow `operating_rules` for target titles;
 - inspect the filename topic and all wikilinks in `topic_candidates`;
 - decide which topics have useful transferable knowledge;
 - resolve each target as existing, new, fallback, or skipped;

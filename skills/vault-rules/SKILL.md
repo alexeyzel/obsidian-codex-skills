@@ -11,7 +11,8 @@ Core rules:
 
 - Use folder roles and paths from `AGENTS.md`; do not hardcode folder names.
 - Use configured knowledge types from `AGENTS.md`; do not hardcode type names.
-- Follow configured `Language Policy` for generated prose, summaries, and new note titles.
+- Follow configured `Language Policy` for generated prose and summaries.
+- Follow configured `Operating Rules` for new note titles.
 - Preserve proper names, official names, acronyms, emails, and established mixed-language names.
 - Manage only configured section roles: `summary` and `user_notes`.
 - Do not manage related links or relationship sections.

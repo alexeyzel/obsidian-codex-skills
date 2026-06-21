@@ -18,7 +18,7 @@ For each source note:
 1. Read the whole source note.
 2. Extract topic candidates from the filename and all wikilinks.
 3. Search candidate knowledge notes for each topic.
-4. Ask the LLM which topics have useful transferable knowledge and which text belongs to each topic, following the configured language policy for prose and titles.
+4. Ask the LLM which topics have useful transferable knowledge and which text belongs to each topic, following language policy for prose and operating rules for titles.
 5. Resolve each target as an existing note, new note, fallback note, or skip.
 6. Insert each selected excerpt under the configured `user_notes` section.
 7. Ask the LLM to summarize each full updated target note into one paragraph.
