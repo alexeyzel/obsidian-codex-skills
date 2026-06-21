@@ -40,25 +40,24 @@ Path rule: `Folder` is written relative to the configured `knowledge` folder. `T
 
 Human editing note: you may change `Heading` values if your templates use another language. Keep `Role` values unchanged.
 
-Agent rule: use placeholders first. If a placeholder is no longer present, find the section by `Heading`. Do not manage sections that are not listed here.
+Agent rule: use placeholders first. If a placeholder is no longer present, find the section by `Heading`. Sections without placeholders are manual template sections; do not write to them unless the user explicitly asks.
 
 | Role | Heading | Placeholder | Applies to |
 |---|---|---|---|
 | summary | Summary | {agent_summary} | knowledge, meeting |
 | user_notes | My notes | {user_notes} | knowledge |
+| related | Related |  | knowledge, meeting |
 
 ## Meeting Sections
 
 Human editing note: you may change `Heading` values if your meeting template uses another language. Keep `Role` values unchanged.
 
-Agent rule: these headings are used only when creating the default meeting template. The agent still manages only the configured summary placeholder in meeting notes.
+Agent rule: these headings are used only when creating the default meeting template. The meeting notes section comes from `Note Sections` role `user_notes`; the related section comes from `Note Sections` role `related`. The agent still manages only the configured summary placeholder in meeting notes.
 
 | Role | Heading |
 |---|---|
 | before | Before |
-| notes | My notes |
 | after | After |
-| related | Related |
 
 ## Language Policy
 

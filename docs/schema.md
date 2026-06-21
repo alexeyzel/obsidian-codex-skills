@@ -44,7 +44,7 @@ The engine manages only configured note section roles:
 
 It uses placeholders first. If a placeholder has already been replaced, it finds the section by configured heading.
 
-The engine does not manage `Related` or other relationship sections.
+Sections without placeholders are template/manual sections. The default `related` section is created in generated templates, but the engine does not populate it automatically.
 
 ## Meeting Sections
 
@@ -53,11 +53,9 @@ The optional `Meeting Sections` table configures static headings used when the e
 Supported roles:
 
 - `before`;
-- `notes`;
 - `after`;
-- `related`.
 
-If the table is missing, the engine uses English defaults, except `notes` follows the configured `user_notes` heading from `Note Sections`.
+The meeting notes section follows the configured `user_notes` heading from `Note Sections`. The related section follows the configured `related` heading from `Note Sections`. If the `Meeting Sections` table is missing, the engine uses English defaults for `before` and `after`.
 
 ## Language Policy
 

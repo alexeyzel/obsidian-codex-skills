@@ -121,6 +121,8 @@ Templates mark insertion points with:
 
 Existing notes do not need to keep those placeholders. After first write, the engine finds sections by the headings configured in `AGENTS.md`.
 
+Templates also include a manual related section by default. It has no placeholder, so the agent does not populate it automatically.
+
 ## Basic Usage
 
 Install first. The installer copies both the skills and the deterministic runtime into `CODEX_HOME`, so a production server does not need commands to run from the repository checkout.

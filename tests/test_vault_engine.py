@@ -311,10 +311,9 @@ class VaultEngineTests(unittest.TestCase):
             agents_text = AGENTS.read_text(encoding="utf-8")
             agents_text = agents_text.replace("| summary | Summary | {agent_summary} |", "| summary | Brief | {agent_summary} |")
             agents_text = agents_text.replace("| user_notes | My notes | {user_notes} |", "| user_notes | Notes | {user_notes} |")
+            agents_text = agents_text.replace("| related | Related |  |", "| related | Context |  |")
             agents_text = agents_text.replace("| before | Before |", "| before | Before Call |")
-            agents_text = agents_text.replace("| notes | My notes |", "| notes | Meeting Notes |")
             agents_text = agents_text.replace("| after | After |", "| after | Follow Up |")
-            agents_text = agents_text.replace("| related | Related |", "| related | Context |")
             local_agents = vault / "AGENTS.md"
             local_agents.write_text(agents_text, encoding="utf-8")
 
@@ -323,10 +322,13 @@ class VaultEngineTests(unittest.TestCase):
             meeting_template = (vault / "Service" / "Templates" / "meeting.md").read_text(encoding="utf-8")
             self.assertIn("## Brief\n{agent_summary}", meeting_template)
             self.assertIn("## Before Call\n-", meeting_template)
-            self.assertIn("## Meeting Notes\n-", meeting_template)
+            self.assertIn("## Notes\n-", meeting_template)
             self.assertIn("## Follow Up\n-", meeting_template)
             self.assertIn("## Context\n-", meeting_template)
             self.assertNotIn("## My notes\n-", meeting_template)
+
+            knowledge_template = (vault / "Service" / "Templates" / "person.md").read_text(encoding="utf-8")
+            self.assertIn("## Context\n-", knowledge_template)
 
     def test_reinit_adds_new_type_without_removing_old_type_folder(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

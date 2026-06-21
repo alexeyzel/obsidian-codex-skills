@@ -371,12 +371,11 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
     for role in ("summary", "user_notes"):
         if role not in sections:
             raise ValueError(f"AGENTS.md is missing required Note Sections role: {role}")
+    sections.setdefault("related", SectionSpec(role="related", heading="Related", placeholder="", applies_to=("knowledge", "meeting")))
 
     meeting_sections: dict[str, MeetingSectionSpec] = {
         "before": MeetingSectionSpec("before", "Before"),
-        "notes": MeetingSectionSpec("notes", sections["user_notes"].heading),
         "after": MeetingSectionSpec("after", "After"),
-        "related": MeetingSectionSpec("related", "Related"),
     }
     for row in parse_markdown_table(text, "Meeting Sections"):
         role = normalize_key(row.get("role", ""))
@@ -655,22 +654,24 @@ def render_template(template: str, values: dict[str, str]) -> str:
 def default_knowledge_template(spec: VaultSpec, note_type: str | None = None) -> str:
     summary = spec.sections["summary"]
     notes = spec.sections["user_notes"]
+    related = spec.sections["related"]
     fm = {"type": note_type} if note_type else {}
     prefix = format_frontmatter(fm) if fm else ""
     return (
         prefix
         + "# {title}\n\n"
         + f"## {summary.heading}\n{summary.placeholder}\n\n"
-        + f"## {notes.heading}\n{notes.placeholder}\n"
+        + f"## {notes.heading}\n{notes.placeholder}\n\n"
+        + f"## {related.heading}\n-\n"
     )
 
 
 def default_meeting_template(spec: VaultSpec) -> str:
     summary = spec.sections["summary"]
     before = spec.meeting_sections["before"].heading
-    notes = spec.meeting_sections["notes"].heading
+    notes = spec.sections["user_notes"].heading
     after = spec.meeting_sections["after"].heading
-    related = spec.meeting_sections["related"].heading
+    related = spec.sections["related"].heading
     return (
         "---\n"
         "type: meeting\n"
