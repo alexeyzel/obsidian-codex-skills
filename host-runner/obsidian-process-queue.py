@@ -31,7 +31,7 @@ DEFAULT_VAULT = Path(os.environ.get("OBSIDIAN_VAULT", str(Path.home() / "obsidia
 DEFAULT_ENGINE = Path.home() / ".codex/obsidian-knowledge-skills/scripts/vault_engine.py"
 DEFAULT_STATE_DIR = Path.home() / ".local/state/obsidian-process-queue"
 DEFAULT_CODEX_BIN = str(Path.home() / ".local/bin/codex")
-DEFAULT_CODEX_ARGS = "exec --skip-git-repo-check --sandbox read-only --ask-for-approval never"
+DEFAULT_CODEX_ARGS = "exec --skip-git-repo-check --sandbox read-only"
 DEFAULT_MAX_CODEX_PROMPT_CHARS = 120000
 
 
