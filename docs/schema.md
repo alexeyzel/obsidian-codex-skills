@@ -67,6 +67,8 @@ Each row has:
 - `Value`;
 - `Rules`.
 
+`Value` is intentionally human-readable policy text, not a strict enum. For example, `title_style = short natural title` tells the LLM how to choose new note titles.
+
 The engine emits `language_policy` in source ingest tasks, summary tasks, and meeting preparation tasks. LLM plans should follow it when choosing new note titles, writing generated summaries, and preserving proper names.
 
 ## Source Task Schema

@@ -61,7 +61,7 @@ Agent rule: these headings are used only when creating the default meeting templ
 
 ## Language Policy
 
-Human editing note: you may change `Value` and `Rules` to match your vault. Keep `Setting` values unchanged unless you also update the agent/engine.
+Human editing note: you may change `Value` and `Rules` to match your vault. Keep `Setting` values unchanged unless you also update the agent/engine. Values are human-readable policy values, not strict enums.
 
 Agent rule: use this table when choosing generated prose language, summary language, and new note titles. Preserve proper names and established project names even when the surrounding prose uses another language.
 
@@ -69,7 +69,7 @@ Agent rule: use this table when choosing generated prose language, summary langu
 |---|---|---|
 | default_content_language | English | Use for generated prose unless the source clearly requires another language. |
 | default_summary_language | English | Write summaries and meeting preparation context in this language by default. |
-| title_language_policy | source_natural_name | Use the natural/common name from the source or explicit target title. Do not translate proper names. Prefer short readable titles over formal registry names unless the formal name is the common name. |
+| title_style | short natural title | Use the natural/common name from the source or explicit target title. Do not translate proper names. Prefer short readable titles over formal registry names unless the formal name is the common name. |
 | preserve_source_language | yes | Preserve user-authored excerpts, quotes, official titles, acronyms, and mixed-language terms when moving notes into `user_notes`. |
 | do_not_translate_proper_names | yes | Do not translate person names, organization names, project names, product names, acronyms, emails, handles, or official terms. |
 | mixed_language_allowed | yes | Mixed-language titles and summaries are allowed for official names, projects, acronyms, roles, and source-specific terminology. |

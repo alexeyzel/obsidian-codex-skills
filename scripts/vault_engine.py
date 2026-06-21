@@ -246,8 +246,8 @@ def default_language_policy() -> list[dict[str, str]]:
             "rules": "Write summaries and meeting preparation context in this language by default.",
         },
         {
-            "setting": "title_language_policy",
-            "value": "source_natural_name",
+            "setting": "title_style",
+            "value": "short natural title",
             "rules": (
                 "Use the natural/common source name or explicit target title. Do not translate proper names. "
                 "Prefer short readable titles over formal registry names unless the formal name is the common name."
