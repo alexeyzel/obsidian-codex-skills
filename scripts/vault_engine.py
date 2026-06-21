@@ -53,6 +53,12 @@ class SectionSpec:
 
 
 @dataclass(frozen=True)
+class MeetingSectionSpec:
+    role: str
+    heading: str
+
+
+@dataclass(frozen=True)
 class TemplateSpec:
     role: str
     path: str
@@ -65,6 +71,7 @@ class VaultSpec:
     folders: dict[str, FolderSpec]
     types: dict[str, TypeSpec]
     sections: dict[str, SectionSpec]
+    meeting_sections: dict[str, MeetingSectionSpec]
     language_policy: list[dict[str, str]]
     templates: dict[str, TemplateSpec]
     limits: dict[str, int]
@@ -365,6 +372,18 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
         if role not in sections:
             raise ValueError(f"AGENTS.md is missing required Note Sections role: {role}")
 
+    meeting_sections: dict[str, MeetingSectionSpec] = {
+        "before": MeetingSectionSpec("before", "Before"),
+        "notes": MeetingSectionSpec("notes", sections["user_notes"].heading),
+        "after": MeetingSectionSpec("after", "After"),
+        "related": MeetingSectionSpec("related", "Related"),
+    }
+    for row in parse_markdown_table(text, "Meeting Sections"):
+        role = normalize_key(row.get("role", ""))
+        heading = row.get("heading", "").strip()
+        if role and heading:
+            meeting_sections[role] = MeetingSectionSpec(role, heading)
+
     language_policy: list[dict[str, str]] = []
     for row in parse_markdown_table(text, "Language Policy"):
         setting = normalize_key(row.get("setting", ""))
@@ -387,7 +406,7 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
         if setting:
             limits[setting] = parse_int(row.get("value", ""), limits.get(setting, 1))
 
-    return VaultSpec(path, folders, types, sections, language_policy, templates, limits)
+    return VaultSpec(path, folders, types, sections, meeting_sections, language_policy, templates, limits)
 
 
 def folder_path(vault: Path, spec: VaultSpec, role: str) -> Path:
@@ -648,6 +667,10 @@ def default_knowledge_template(spec: VaultSpec, note_type: str | None = None) ->
 
 def default_meeting_template(spec: VaultSpec) -> str:
     summary = spec.sections["summary"]
+    before = spec.meeting_sections["before"].heading
+    notes = spec.meeting_sections["notes"].heading
+    after = spec.meeting_sections["after"].heading
+    related = spec.meeting_sections["related"].heading
     return (
         "---\n"
         "type: meeting\n"
@@ -657,10 +680,10 @@ def default_meeting_template(spec: VaultSpec) -> str:
         "---\n"
         "# {date} - {title}\n\n"
         f"## {summary.heading}\n{summary.placeholder}\n\n"
-        "## Before\n-\n\n"
-        "## My notes\n-\n\n"
-        "## After\n-\n\n"
-        "## Related\n-\n"
+        f"## {before}\n-\n\n"
+        f"## {notes}\n-\n\n"
+        f"## {after}\n-\n\n"
+        f"## {related}\n-\n"
     )
 
 

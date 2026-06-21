@@ -29,6 +29,7 @@ The engine reads tables from `AGENTS.md`:
 - `Folders`: required folder roles and their paths.
 - `Knowledge Types`: user-defined knowledge categories.
 - `Note Sections`: section headings and placeholders managed by the agent.
+- `Meeting Sections`: headings used when generating the default meeting template.
 - `Language Policy`: generated prose, summary language, and title naming rules.
 - `Templates`: template files for new notes.
 - `Processing Limits`: safeguards for context size and batch size.

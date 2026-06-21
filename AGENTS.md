@@ -47,6 +47,19 @@ Agent rule: use placeholders first. If a placeholder is no longer present, find 
 | summary | Summary | {agent_summary} | knowledge, meeting |
 | user_notes | My notes | {user_notes} | knowledge |
 
+## Meeting Sections
+
+Human editing note: you may change `Heading` values if your meeting template uses another language. Keep `Role` values unchanged.
+
+Agent rule: these headings are used only when creating the default meeting template. The agent still manages only the configured summary placeholder in meeting notes.
+
+| Role | Heading |
+|---|---|
+| before | Before |
+| notes | My notes |
+| after | After |
+| related | Related |
+
 ## Language Policy
 
 Human editing note: you may change `Value` and `Rules` to match your vault. Keep `Setting` values unchanged unless you also update the agent/engine.

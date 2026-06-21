@@ -46,6 +46,19 @@ It uses placeholders first. If a placeholder has already been replaced, it finds
 
 The engine does not manage `Related` or other relationship sections.
 
+## Meeting Sections
+
+The optional `Meeting Sections` table configures static headings used when the engine creates the default meeting template. It does not make those sections agent-managed.
+
+Supported roles:
+
+- `before`;
+- `notes`;
+- `after`;
+- `related`.
+
+If the table is missing, the engine uses English defaults, except `notes` follows the configured `user_notes` heading from `Note Sections`.
+
 ## Language Policy
 
 The optional `Language Policy` table configures generated prose language, summary language, and title naming behavior. If the table is missing, the engine uses an English-by-default fallback policy.
