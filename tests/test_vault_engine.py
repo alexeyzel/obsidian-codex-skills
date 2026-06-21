@@ -55,7 +55,7 @@ class VaultEngineTests(unittest.TestCase):
             self.assertEqual(tasks["tasks"][0]["source_policy"], "delete_after_success")
             self.assertEqual(
                 next(item["value"] for item in tasks["language_policy"] if item["setting"] == "default_summary_language"),
-                "Ukrainian",
+                "English",
             )
             self.assertEqual({item["topic"] for item in tasks["tasks"][0]["topic_candidates"]}, {"Composite source", "Alpha Project", "Beta Topic"})
 
@@ -210,14 +210,76 @@ class VaultEngineTests(unittest.TestCase):
             summary_tasks = self.run_engine(vault, "summary-tasks", "--limit", "10")
             self.assertEqual(
                 next(item["value"] for item in summary_tasks["language_policy"] if item["setting"] == "default_summary_language"),
-                "Ukrainian",
+                "English",
             )
 
             prep_task = self.run_engine(vault, "meeting-prep-task", "--calendar-title", "DIA Support", "--date", "2026-06-22")
             self.assertEqual(
                 next(item["value"] for item in prep_task["language_policy"] if item["setting"] == "title_language_policy"),
-                "natural_source_name",
+                "source_natural_name",
             )
+
+    def test_relative_config_paths_are_resolved_from_role_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            agents_text = AGENTS.read_text(encoding="utf-8")
+            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Вхідні |")
+            agents_text = agents_text.replace("| queue | Queue |", "| queue | Черга |")
+            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | Знання |")
+            agents_text = agents_text.replace("| fallback | Other |", "| fallback | Інше |")
+            agents_text = agents_text.replace("| service | Service |", "| service | Службове |")
+            agents_text = agents_text.replace("| person | People |", "| person | Люди |")
+            local_agents = vault / "AGENTS.md"
+            local_agents.write_text(agents_text, encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(ENGINE), "init", "--vault", str(vault)],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+            payload = json.loads(result.stdout)
+
+            self.assertIn("_Вхідні/Черга", payload["created_or_checked"])
+            self.assertIn("Знання/Інше", payload["created_or_checked"])
+            self.assertIn("Знання/Люди", payload["created_or_checked"])
+            self.assertTrue((vault / "Службове" / "Templates" / "person.md").exists())
+            self.assertFalse((vault / "Службове" / "Templates" / "Service").exists())
+
+    def test_legacy_full_paths_follow_renamed_role_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            agents_text = AGENTS.read_text(encoding="utf-8")
+            agents_text = agents_text.replace("| inbox | Inbox |", "| inbox | _Вхідні |")
+            agents_text = agents_text.replace("| queue | Queue |", "| queue | Inbox/Queue |")
+            agents_text = agents_text.replace("| knowledge | Knowledge |", "| knowledge | Знання |")
+            agents_text = agents_text.replace("| fallback | Other |", "| fallback | Knowledge/Other |")
+            agents_text = agents_text.replace("| service | Service |", "| service | Службове |")
+            agents_text = agents_text.replace("| person | People |", "| person | Knowledge/People |")
+            agents_text = agents_text.replace("| person.md |", "| Service/Templates/person.md |")
+            local_agents = vault / "AGENTS.md"
+            local_agents.write_text(agents_text, encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(ENGINE), "init", "--vault", str(vault)],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+            payload = json.loads(result.stdout)
+
+            self.assertIn("_Вхідні/Queue", payload["created_or_checked"])
+            self.assertIn("Знання/Other", payload["created_or_checked"])
+            self.assertIn("Знання/People", payload["created_or_checked"])
+            self.assertTrue((vault / "Службове" / "Templates" / "person.md").exists())
+            self.assertFalse((vault / "_Вхідні" / "Inbox" / "Queue").exists())
+            self.assertFalse((vault / "Знання" / "Knowledge" / "People").exists())
 
 
 if __name__ == "__main__":

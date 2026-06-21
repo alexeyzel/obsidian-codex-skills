@@ -13,6 +13,13 @@ Folder roles are stable. Paths are configurable. The required roles are:
 - `fallback`;
 - `service`.
 
+`Path` values are vault-relative, with two parent-aware exceptions:
+
+- `queue` is resolved inside `inbox`, so `queue = Queue` becomes `Inbox/Queue`.
+- `fallback` is resolved inside `knowledge`, so `fallback = Other` becomes `Knowledge/Other`.
+
+Full old-style paths such as `Inbox/Queue` and `Knowledge/Other` are still accepted. If you rename a root folder, old default prefixes `Inbox`, `Knowledge`, and `Service` are treated as aliases for the current configured roots.
+
 ## Knowledge Types
 
 Knowledge types are user-configurable rows in the `Knowledge Types` table. Each type has:
@@ -23,6 +30,10 @@ Knowledge types are user-configurable rows in the `Knowledge Types` table. Each 
 - `Description`.
 
 The fallback folder is not a knowledge type. It is used when a note is meaningful but no configured type fits.
+
+`Folder` values in `Knowledge Types` are resolved inside the configured `knowledge` folder. For example, if `knowledge = Knowledge`, then `Folder = People` becomes `Knowledge/People`. This keeps folder renaming in one place. Old-style `Knowledge/People` is also accepted and follows a renamed `knowledge` root.
+
+`Template` values in `Knowledge Types` are resolved inside `service/Templates` unless they already start with the configured service path. For example, `Template = person.md` becomes `Service/Templates/person.md`. Old-style `Service/Templates/person.md` is also accepted and follows a renamed `service` root.
 
 ## Sections
 
@@ -37,7 +48,7 @@ The engine does not manage `Related` or other relationship sections.
 
 ## Language Policy
 
-The optional `Language Policy` table configures generated prose language, summary language, and title naming behavior. If the table is missing, the engine uses a Ukrainian-by-default fallback policy.
+The optional `Language Policy` table configures generated prose language, summary language, and title naming behavior. If the table is missing, the engine uses an English-by-default fallback policy.
 
 Each row has:
 
@@ -93,6 +104,8 @@ For meetings, use `source_policy: keep_and_mark_processed`. If `has_summary_plac
 `coverage` must be `complete` only when all useful source text was transferred or explicitly ignored as non-durable knowledge.
 
 ## Templates
+
+Template `Path` values are resolved inside the configured `service` folder unless they already start with that service path. For example, `Templates/knowledge.md` becomes `Service/Templates/knowledge.md`.
 
 Knowledge templates should include:
 

@@ -109,6 +109,46 @@ def normalize_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
+def normalize_config_path(value: str) -> str:
+    cleaned = str(value).replace("\\", "/").strip().strip("/")
+    return re.sub(r"/+", "/", cleaned)
+
+
+def config_path_is_within(path: str, parent: str) -> bool:
+    path_norm = normalize_config_path(path)
+    parent_norm = normalize_config_path(parent)
+    return path_norm == parent_norm or path_norm.startswith(parent_norm + "/")
+
+
+DEFAULT_ROLE_PATHS = {"inbox": "Inbox", "knowledge": "Knowledge", "service": "Service"}
+
+
+def strip_config_prefix(path: str, prefix: str) -> str | None:
+    path_norm = normalize_config_path(path)
+    prefix_norm = normalize_config_path(prefix)
+    if path_norm == prefix_norm:
+        return ""
+    if path_norm.startswith(prefix_norm + "/"):
+        return path_norm[len(prefix_norm) + 1 :]
+    return None
+
+
+def config_join(parent: str, child: str, legacy_parent: str | None = None) -> str:
+    parent_norm = normalize_config_path(parent)
+    child_norm = normalize_config_path(child)
+    if not parent_norm:
+        return child_norm
+    if not child_norm:
+        return parent_norm
+    if config_path_is_within(child_norm, parent_norm):
+        return child_norm
+    if legacy_parent:
+        legacy_suffix = strip_config_prefix(child_norm, legacy_parent)
+        if legacy_suffix is not None:
+            return config_join(parent_norm, legacy_suffix)
+    return f"{parent_norm}/{child_norm}"
+
+
 def split_table_row(line: str) -> list[str]:
     raw = line.strip()
     if raw.startswith("|"):
@@ -185,18 +225,21 @@ def default_language_policy() -> list[dict[str, str]]:
     return [
         {
             "setting": "default_content_language",
-            "value": "Ukrainian",
+            "value": "English",
             "rules": "Use for generated prose unless the source clearly requires another language.",
         },
         {
             "setting": "default_summary_language",
-            "value": "Ukrainian",
+            "value": "English",
             "rules": "Write summaries and meeting preparation context in this language by default.",
         },
         {
             "setting": "title_language_policy",
-            "value": "natural_source_name",
-            "rules": "Use the natural/common source name; preserve established proper names and official project names.",
+            "value": "source_natural_name",
+            "rules": (
+                "Use the natural/common source name or explicit target title. Do not translate proper names. "
+                "Prefer short readable titles over formal registry names unless the formal name is the common name."
+            ),
         },
         {
             "setting": "preserve_source_language",
@@ -220,22 +263,53 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
     path = resolve_agents_path(vault, agents_path)
     text = read_text(path)
 
-    folders: dict[str, FolderSpec] = {}
+    raw_folders: dict[str, FolderSpec] = {}
     for row in parse_markdown_table(text, "Folders"):
         role = normalize_key(row.get("role", ""))
-        folder_path = row.get("path", "").strip()
+        folder_path = normalize_config_path(row.get("path", ""))
         if role and folder_path:
-            folders[role] = FolderSpec(role=role, path=folder_path, rules=row.get("rules", ""))
-    missing = REQUIRED_FOLDER_ROLES - set(folders)
+            raw_folders[role] = FolderSpec(role=role, path=folder_path, rules=row.get("rules", ""))
+    missing = REQUIRED_FOLDER_ROLES - set(raw_folders)
     if missing:
         raise ValueError(f"AGENTS.md is missing required folder roles: {', '.join(sorted(missing))}")
+
+    folders: dict[str, FolderSpec] = {}
+    nested_folder_roles = {"queue": "inbox", "fallback": "knowledge"}
+    for role, folder in raw_folders.items():
+        folder_path = folder.path
+        parent_role = nested_folder_roles.get(role)
+        if parent_role:
+            folder_path = config_join(
+                raw_folders[parent_role].path,
+                folder_path,
+                legacy_parent=DEFAULT_ROLE_PATHS.get(parent_role),
+            )
+        folders[role] = FolderSpec(role=role, path=folder_path, rules=folder.rules)
+
+    service_templates_root = config_join(folders["service"].path, "Templates")
+
+    def resolve_knowledge_folder(value: str) -> str:
+        return config_join(folders["knowledge"].path, value, legacy_parent=DEFAULT_ROLE_PATHS["knowledge"])
+
+    def resolve_template(value: str) -> str:
+        template_path = normalize_config_path(value)
+        if config_path_is_within(template_path, folders["service"].path):
+            return template_path
+        legacy_service_suffix = strip_config_prefix(template_path, DEFAULT_ROLE_PATHS["service"])
+        if legacy_service_suffix is not None:
+            return config_join(folders["service"].path, legacy_service_suffix)
+        if config_path_is_within(template_path, "Templates"):
+            return config_join(folders["service"].path, template_path)
+        return config_join(service_templates_root, template_path)
 
     types: dict[str, TypeSpec] = {}
     for row in parse_markdown_table(text, "Knowledge Types"):
         note_type = normalize_key(row.get("type", ""))
-        folder = row.get("folder", "").strip()
-        template = row.get("template", "").strip()
+        folder = normalize_config_path(row.get("folder", ""))
+        template = normalize_config_path(row.get("template", ""))
         if note_type and folder:
+            folder = resolve_knowledge_folder(folder)
+            template = resolve_template(template) if template else ""
             types[note_type] = TypeSpec(
                 type=note_type,
                 folder=folder,
@@ -272,16 +346,16 @@ def load_spec(vault: Path, agents_path: str | None = None) -> VaultSpec:
     templates: dict[str, TemplateSpec] = {}
     for row in parse_markdown_table(text, "Templates"):
         role = normalize_key(row.get("role", ""))
-        template_path = row.get("path", "").strip()
+        template_path = normalize_config_path(row.get("path", ""))
         if role and template_path:
+            template_path = resolve_template(template_path)
             templates[role] = TemplateSpec(role=role, path=template_path, rules=row.get("rules", ""))
 
-    service = folders["service"].path
     templates.setdefault(
         "knowledge_default",
-        TemplateSpec("knowledge_default", f"{service}/Templates/knowledge.md", "Fallback knowledge template."),
+        TemplateSpec("knowledge_default", resolve_template("knowledge.md"), "Fallback knowledge template."),
     )
-    templates.setdefault("meeting", TemplateSpec("meeting", f"{service}/Templates/meeting.md", "Meeting template."))
+    templates.setdefault("meeting", TemplateSpec("meeting", resolve_template("meeting.md"), "Meeting template."))
 
     limits = {
         "max_llm_input_chars": 60000,

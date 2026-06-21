@@ -33,6 +33,18 @@ The engine reads tables from `AGENTS.md`:
 - `Templates`: template files for new notes.
 - `Processing Limits`: safeguards for context size and batch size.
 
+Paths are intentionally parent-aware so a human does not have to repeat root folder names:
+
+- `queue` is relative to `inbox`;
+- `fallback` is relative to `knowledge`;
+- knowledge type folders are relative to `knowledge`;
+- knowledge type templates are relative to `service/Templates`;
+- template paths are relative to `service`.
+
+For example, changing `knowledge` from `Knowledge` to `Знання` automatically makes `Folder = People` resolve to `Знання/People`.
+
+Old-style full paths such as `Knowledge/People` or `Service/Templates/person.md` are also accepted; if the root role is renamed, default prefixes are treated as aliases for the current configured root.
+
 The Python engine only performs mechanics:
 
 - scan files;
