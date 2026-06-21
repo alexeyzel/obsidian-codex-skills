@@ -21,6 +21,7 @@ This repository contains a portable Codex skill suite and deterministic helper e
 | `Config.md` | Default configurable contract for the vault maintenance agent. |
 | `scripts/vault_engine.py` | Deterministic engine for file mechanics, task generation, and plan application. |
 | `skills/` | Codex skills that call the installed runtime and perform semantic LLM work. |
+| `host-runner/` | Optional host-side wrappers for n8n, cron, or other schedulers. |
 | `docs/` | Public documentation for architecture, schema, operations, and method. |
 | `tests/` | Unit tests for the deterministic engine. |
 

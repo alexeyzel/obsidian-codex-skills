@@ -18,9 +18,11 @@ $name"
 done
 
 rm -rf "$RUNTIME_DIR"
-mkdir -p "$RUNTIME_DIR/scripts"
+mkdir -p "$RUNTIME_DIR/scripts" "$RUNTIME_DIR/host-runner"
 cp "$SCRIPT_DIR/scripts/vault_engine.py" "$RUNTIME_DIR/scripts/"
 cp "$SCRIPT_DIR/Config.md" "$RUNTIME_DIR/"
+cp "$SCRIPT_DIR/host-runner/obsidian-process-queue.py" "$RUNTIME_DIR/host-runner/"
+cp "$SCRIPT_DIR/host-runner/README.md" "$RUNTIME_DIR/host-runner/"
 
 {
   printf '{\n'

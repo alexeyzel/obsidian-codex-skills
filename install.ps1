@@ -21,8 +21,11 @@ if (Test-Path -LiteralPath $runtimeDir) {
     Remove-Item -LiteralPath $runtimeDir -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $runtimeDir "scripts") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $runtimeDir "host-runner") | Out-Null
 Copy-Item -Path (Join-Path $scriptDir "scripts\vault_engine.py") -Destination (Join-Path $runtimeDir "scripts") -Force
 Copy-Item -Path (Join-Path $scriptDir "Config.md") -Destination $runtimeDir -Force
+Copy-Item -Path (Join-Path $scriptDir "host-runner\obsidian-process-queue.py") -Destination (Join-Path $runtimeDir "host-runner") -Force
+Copy-Item -Path (Join-Path $scriptDir "host-runner\README.md") -Destination (Join-Path $runtimeDir "host-runner") -Force
 
 $manifest = [ordered]@{
     name = "codex-obsidian-knowledge-skills"

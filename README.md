@@ -9,6 +9,7 @@ The project is built around one principle: the vault stays human-readable, while
 - Initializes a vault from a human-readable `Config.md` contract.
 - Processes inbox queue notes and meeting notes through one universal source-ingest flow.
 - Creates preparation notes for future meetings from recent relevant context.
+- Provides an optional host-side runner for n8n or cron to call the ingest flow through Codex CLI.
 - Keeps summaries short, useful, and editable.
 - Keeps agent state in service files instead of polluting note bodies.
 
@@ -82,6 +83,8 @@ docs/
   method.md
   operations.md
   schema.md
+host-runner/
+  obsidian-process-queue.py  # optional n8n/cron wrapper around Codex CLI + engine
 evals/
   evals.json
 install.sh
@@ -224,8 +227,28 @@ The installer copies:
 
 - skill directories into `$CODEX_HOME/skills`;
 - runtime files into `$CODEX_HOME/obsidian-knowledge-skills`.
+- the optional host runner into `$CODEX_HOME/obsidian-knowledge-skills/host-runner`.
 
 It does not modify an existing production vault. Vault configuration lives in that vault's own `Config.md`.
+
+## n8n Host Runner
+
+For unattended n8n or cron execution, expose the installed host runner as one command on the machine that has the synced Markdown vault:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 700 \
+  "${CODEX_HOME:-$HOME/.codex}/obsidian-knowledge-skills/host-runner/obsidian-process-queue.py" \
+  "$HOME/.local/bin/obsidian-process-queue"
+```
+
+Then n8n can call only this SSH command:
+
+```bash
+OBSIDIAN_VAULT="/path/to/obsidian/vault" "$HOME/.local/bin/obsidian-process-queue"
+```
+
+The runner prints one JSON object to stdout with `status`, `summary_uk`, counts, changed notes, skipped items, and errors. See `host-runner/README.md` for the full contract.
 
 ## Updating
 

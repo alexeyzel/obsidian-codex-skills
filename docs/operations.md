@@ -41,6 +41,31 @@ git pull --ff-only
 
 The installer replaces the installed skill/runtime copy. It does not modify existing vaults.
 
+## n8n Or Cron Runner
+
+The optional host runner is installed into the runtime folder:
+
+```bash
+${CODEX_HOME:-$HOME/.codex}/obsidian-knowledge-skills/host-runner/obsidian-process-queue.py
+```
+
+Expose it as one stable host command:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 700 \
+  "${CODEX_HOME:-$HOME/.codex}/obsidian-knowledge-skills/host-runner/obsidian-process-queue.py" \
+  "$HOME/.local/bin/obsidian-process-queue"
+```
+
+Run it with the vault path:
+
+```bash
+OBSIDIAN_VAULT="/path/to/vault" "$HOME/.local/bin/obsidian-process-queue"
+```
+
+The runner calls Codex with a read-only sandbox to produce JSON plans, then applies changes through the deterministic engine. It returns one JSON object for n8n.
+
 ## Uninstall
 
 ```bash
