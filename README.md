@@ -18,7 +18,7 @@ The project is built around one principle: the vault stays human-readable, while
 - It does not hardcode private folder names, entities, projects, or domains.
 - It does not decide note meaning inside Python.
 - It does not rewrite user-authored meeting notes.
-- It does not create relationship links automatically.
+- It does not create relationship links automatically, but it preserves wikilinks that already existed in source text.
 - It does not delete queue notes until all target notes have been updated, summarized, logged, and indexed.
 
 ## Core Idea
@@ -108,6 +108,7 @@ Rules:
 - knowledge notes are the normal write surface for the agent;
 - unclear but meaningful notes go to the configured fallback folder;
 - truly unprocessable queue notes remain in queue with a compact `Agent note` explaining why.
+- source wikilinks are preserved when source-authored text is transferred into knowledge notes.
 
 Knowledge notes use two agent-managed areas:
 

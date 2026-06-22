@@ -25,7 +25,7 @@ For each source note:
 8. Apply summaries, log, and rebuild the index.
 9. Finalize the source according to its policy.
 
-Source-derived excerpts may be shortened or paraphrased, but useful Markdown structure should be preserved.
+Source-derived excerpts may be shortened or paraphrased, but useful Markdown structure and existing source wikilinks should be preserved. The agent does not invent new relationship links; it keeps links that were already part of the source material.
 
 If the type is unclear but the topic is meaningful, use the configured fallback folder. If the source cannot be processed, keep it unfinalized.
 

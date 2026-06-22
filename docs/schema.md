@@ -109,7 +109,8 @@ The LLM returns actions:
           "decision": "create_new",
           "target_title": "Example topic",
           "type": "topic",
-          "notes_markdown": "- Useful source excerpt."
+          "notes_markdown": "- Useful source excerpt with [[Existing source link]] preserved.",
+          "preserve_links": ["[[Existing source link]]"]
         }
       ]
     }
@@ -118,6 +119,8 @@ The LLM returns actions:
 ```
 
 For meetings, use `source_policy: keep_and_mark_processed`. If `has_summary_placeholder` is true, include `source_summary` as one paragraph.
+
+`notes_markdown` should keep source wikilinks on the corresponding names. If the LLM paraphrases text and a source wikilink must remain connected to the update, include it in `preserve_links`. The engine may restore missing source wikilinks from exact names, and may append source lines that contain required wikilinks so the graph relationship is not silently lost.
 
 `coverage` must be `complete` only when all useful source text was transferred or explicitly ignored as non-durable knowledge.
 

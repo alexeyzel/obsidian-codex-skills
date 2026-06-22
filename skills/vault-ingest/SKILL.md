@@ -28,6 +28,8 @@ For every task:
 For every target update:
 
 - preserve useful Markdown structure;
+- preserve existing source wikilinks in transferred source-authored text;
+- when paraphrasing, keep source wikilinks on the corresponding names and use `preserve_links` for source wikilinks that must remain connected to the update;
 - shorten or paraphrase only when it makes the target note cleaner;
 - preserve proper names, official titles, acronyms, emails, and established mixed-language names;
 - use fallback when the topic is meaningful but no configured type fits.

@@ -14,6 +14,8 @@ Core rules:
 - Follow configured `Language Policy` for generated prose and summaries.
 - Follow configured `Operating Rules` for new note titles.
 - Preserve proper names, official names, acronyms, emails, and established mixed-language names.
+- Preserve existing source wikilinks when transferring source-authored text into knowledge notes.
+- When paraphrasing source text, keep source wikilinks on the corresponding names or include them in `preserve_links`.
 - Manage only configured section roles: `summary` and `user_notes`.
 - Do not manage related links or relationship sections.
 - Use one universal source ingest flow for queue notes and meeting notes.

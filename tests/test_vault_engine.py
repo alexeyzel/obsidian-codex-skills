@@ -110,6 +110,209 @@ class VaultEngineTests(unittest.TestCase):
             self.assertEqual(finalized["deleted"], ["Inbox/Queue/Composite source.md"])
             self.assertFalse(source.exists())
 
+    def test_source_wikilinks_are_preserved_when_llm_returns_plain_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Inbox" / "Queue" / "DIA Support Project.md"
+            source.write_text(
+                "---\n"
+                "type: project\n"
+                "---\n"
+                "# DIA Support Project\n\n"
+                "## My notes\n"
+                "- Donor: [[Alpha Org]]\n"
+                "- Team: [[Jane Doe]]\n",
+                encoding="utf-8",
+            )
+
+            tasks = self.run_engine(vault, "queue-tasks", "--limit", "10")
+            self.assertIn("Preserve existing source wikilinks", tasks["instruction"])
+
+            plan_file = vault / "plan.json"
+            self.write_json(
+                plan_file,
+                {
+                    "actions": [
+                        {
+                            "kind": "source",
+                            "source": "Inbox/Queue/DIA Support Project.md",
+                            "source_policy": "delete_after_success",
+                            "coverage": "complete",
+                            "updates": [
+                                {
+                                    "topic": "DIA Support Project",
+                                    "decision": "create_new",
+                                    "target_title": "DIA Support Project",
+                                    "type": "project",
+                                    "notes_markdown": "## My notes\n- Donor: Alpha Org\n- Team: Jane Doe",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            self.run_engine(vault, "apply-plan", "--input", str(plan_file), "--today", "2026-06-21")
+
+            target_text = (vault / "Knowledge" / "Projects" / "DIA Support Project.md").read_text(encoding="utf-8")
+            self.assertIn("- Donor: [[Alpha Org]]", target_text)
+            self.assertIn("- Team: [[Jane Doe]]", target_text)
+            self.assertEqual(target_text.count("## My notes"), 1)
+
+    def test_restored_source_wikilinks_do_not_create_self_links(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Inbox" / "Queue" / "People.md"
+            source.write_text("- [[Jane Doe]] is the project manager.\n", encoding="utf-8")
+
+            plan_file = vault / "plan.json"
+            self.write_json(
+                plan_file,
+                {
+                    "actions": [
+                        {
+                            "kind": "source",
+                            "source": "Inbox/Queue/People.md",
+                            "source_policy": "delete_after_success",
+                            "coverage": "complete",
+                            "updates": [
+                                {
+                                    "topic": "Jane Doe",
+                                    "decision": "create_new",
+                                    "target_title": "Jane Doe",
+                                    "type": "person",
+                                    "notes_markdown": "- Jane Doe is the project manager.",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            self.run_engine(vault, "apply-plan", "--input", str(plan_file), "--today", "2026-06-21")
+
+            target_text = (vault / "Knowledge" / "People" / "Jane Doe.md").read_text(encoding="utf-8")
+            self.assertIn("- Jane Doe is the project manager.", target_text)
+            self.assertNotIn("[[Jane Doe]]", target_text)
+
+    def test_filename_topic_keeps_all_source_wikilinks_when_text_is_paraphrased(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Inbox" / "Queue" / "Softlist.md"
+            source.write_text(
+                "- Software developer.\n"
+                "- Director [[Dmytro Prokopenko]] knows [[Oleksii Vyskub]] and [[Oleksandr Ryzhenko]].\n"
+                "- The company is ok.\n",
+                encoding="utf-8",
+            )
+
+            plan_file = vault / "plan.json"
+            self.write_json(
+                plan_file,
+                {
+                    "actions": [
+                        {
+                            "kind": "source",
+                            "source": "Inbox/Queue/Softlist.md",
+                            "source_policy": "delete_after_success",
+                            "coverage": "complete",
+                            "updates": [
+                                {
+                                    "topic": "Softlist",
+                                    "decision": "create_new",
+                                    "target_title": "Softlist",
+                                    "type": "organization",
+                                    "notes_markdown": "- Software developer with an acceptable reputation.",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            self.run_engine(vault, "apply-plan", "--input", str(plan_file), "--today", "2026-06-21")
+
+            target_text = (vault / "Knowledge" / "Organizations" / "Softlist.md").read_text(encoding="utf-8")
+            self.assertIn("[[Dmytro Prokopenko]]", target_text)
+            self.assertIn("[[Oleksii Vyskub]]", target_text)
+            self.assertIn("[[Oleksandr Ryzhenko]]", target_text)
+
+    def test_linked_topic_keeps_wikilinks_from_same_source_line(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Inbox" / "Queue" / "Softlist.md"
+            source.write_text(
+                "- Director [[Dmytro Prokopenko]] knows [[Oleksii Vyskub]] and [[Oleksandr Ryzhenko]].\n",
+                encoding="utf-8",
+            )
+
+            plan_file = vault / "plan.json"
+            self.write_json(
+                plan_file,
+                {
+                    "actions": [
+                        {
+                            "kind": "source",
+                            "source": "Inbox/Queue/Softlist.md",
+                            "source_policy": "delete_after_success",
+                            "coverage": "complete",
+                            "updates": [
+                                {
+                                    "topic": "Dmytro Prokopenko",
+                                    "decision": "create_new",
+                                    "target_title": "Dmytro Prokopenko",
+                                    "type": "person",
+                                    "notes_markdown": "- Director of Softlist.",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            self.run_engine(vault, "apply-plan", "--input", str(plan_file), "--today", "2026-06-21")
+
+            target_text = (vault / "Knowledge" / "People" / "Dmytro Prokopenko.md").read_text(encoding="utf-8")
+            self.assertIn("- Director of Softlist.", target_text)
+            self.assertIn("Dmytro Prokopenko knows [[Oleksii Vyskub]] and [[Oleksandr Ryzhenko]]", target_text)
+            self.assertNotIn("[[Dmytro Prokopenko]]", target_text)
+
+    def test_preserve_links_can_keep_source_wikilinks_after_paraphrase(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Inbox" / "Queue" / "Composite.md"
+            source.write_text("- Ask [[Jane Doe]] about [[Alpha Org]].\n", encoding="utf-8")
+
+            plan_file = vault / "plan.json"
+            self.write_json(
+                plan_file,
+                {
+                    "actions": [
+                        {
+                            "kind": "source",
+                            "source": "Inbox/Queue/Composite.md",
+                            "source_policy": "delete_after_success",
+                            "coverage": "complete",
+                            "updates": [
+                                {
+                                    "topic": "Alpha Org",
+                                    "decision": "create_new",
+                                    "target_title": "Alpha Org",
+                                    "type": "organization",
+                                    "notes_markdown": "- Ask Jane about the organization.",
+                                    "preserve_links": ["[[Jane Doe]]"],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+            self.run_engine(vault, "apply-plan", "--input", str(plan_file), "--today", "2026-06-21")
+
+            target_text = (vault / "Knowledge" / "Organizations" / "Alpha Org.md").read_text(encoding="utf-8")
+            self.assertIn("[[Jane Doe]]", target_text)
+
     def test_partial_queue_source_stays_with_agent_note(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)

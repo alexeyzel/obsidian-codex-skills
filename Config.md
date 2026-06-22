@@ -118,5 +118,6 @@ Agent rule: never silently exceed these limits. If a source cannot fit, leave it
 - If a user wants a meeting note processed again, they should set `agent_processed: false`.
 - If a meeting note still contains the configured summary placeholder, write one useful paragraph into it before setting `agent_processed: true`.
 - Source-derived excerpts may be shortened or paraphrased, but they should preserve useful markdown structure.
+- Source-derived excerpts should preserve existing source wikilinks. Do not remove brackets from links that were already present in the source; if text is paraphrased, keep source wikilinks on the corresponding names or include them in `preserve_links`.
 - Knowledge summaries must be one high-quality paragraph that captures the important essence of the full updated note.
 - Meeting preparation creates future meeting notes, writes only the summary placeholder, and does not set `agent_processed: true`.

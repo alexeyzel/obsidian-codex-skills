@@ -166,7 +166,10 @@ class Runner:
             "Each action must follow the action_schema from the task payloads. "
             "Process queue sources with source_policy delete_after_success. "
             "Process meeting sources with source_policy keep_and_mark_processed. "
-            "Do not do internet research. Do not invent relationship links. "
+            "Do not do internet research. Preserve existing source wikilinks in notes_markdown. "
+            "If you paraphrase source text, keep source wikilinks on the corresponding names and "
+            "set preserve_links for source wikilinks that must remain connected to each update. "
+            "Do not invent relationship links that were not present in the source. "
             "Follow language_policy and operating_rules from the payloads. "
             "\n\nQUEUE_TASK_PAYLOAD:\n"
             + json.dumps(queue_payload, ensure_ascii=False)

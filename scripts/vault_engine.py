@@ -500,6 +500,59 @@ def extract_links(text: str) -> list[str]:
     return sorted(set(links))
 
 
+def wikilink_display_target(raw: str) -> tuple[str, str]:
+    target_part, *alias_part = raw.split("|", 1)
+    target = target_part.split("#", 1)[0].strip()
+    alias = alias_part[0].strip() if alias_part else ""
+    display = alias or Path(target).name or target
+    return target, display
+
+
+def extract_wikilink_records(text: str) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for match in re.finditer(r"\[\[([^\]]+)\]\]", text):
+        raw = match.group(1).strip()
+        target, display = wikilink_display_target(raw)
+        if not target:
+            continue
+        key = (target.casefold(), display.casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        records.append({"markup": f"[[{raw}]]", "target": target, "display": display})
+    return records
+
+
+def records_by_markup(records: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    return {record["markup"]: record for record in records}
+
+
+def record_matches_title(record: dict[str, str], title: str) -> bool:
+    wanted = title.strip().casefold()
+    if not wanted:
+        return False
+    values = {
+        record["target"].strip().casefold(),
+        record["display"].strip().casefold(),
+        Path(record["target"]).name.strip().casefold(),
+    }
+    return wanted in values
+
+
+def line_wikilink_records(line: str, all_records: dict[str, dict[str, str]]) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"\[\[([^\]]+)\]\]", line):
+        raw = match.group(1).strip()
+        markup = f"[[{raw}]]"
+        record = all_records.get(markup)
+        if record and markup not in seen:
+            records.append(record)
+            seen.add(markup)
+    return records
+
+
 def sanitize_filename(title: str) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", title).strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
@@ -609,6 +662,185 @@ def append_agent_note(path: Path, reason: str) -> None:
 def build_dated_block(markdown: str, heading: str) -> str:
     markdown = normalize_markdown_block(markdown)
     return f"### {heading}\n{markdown}"
+
+
+def strip_config_section_headings(markdown: str, spec: VaultSpec) -> str:
+    headings = {section.heading.strip().casefold() for section in spec.sections.values() if section.heading.strip()}
+    if not headings:
+        return markdown
+    kept: list[str] = []
+    for line in markdown.splitlines():
+        match = re.match(r"^\s*#{1,6}\s+(.+?)\s*$", line)
+        if match and match.group(1).strip().casefold() in headings:
+            continue
+        kept.append(line)
+    return normalize_markdown_block("\n".join(kept))
+
+
+def boundary_pattern(text: str) -> re.Pattern[str]:
+    escaped = re.escape(text)
+    return re.compile(rf"(?<![\w'’ʼ-]){escaped}(?![\w'’ʼ-])", flags=re.UNICODE)
+
+
+def restore_source_wikilinks(markdown: str, source_text: str, target_title: str) -> str:
+    records = extract_wikilink_records(source_text)
+    if not records:
+        return markdown
+    target_norm = target_title.strip().casefold()
+    replacements: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for record in records:
+        link_target = record["target"].strip()
+        candidates = [record["display"].strip(), Path(link_target).name.strip()]
+        if link_target.strip():
+            candidates.append(link_target.strip())
+        link_title_norms = {candidate.casefold() for candidate in candidates if candidate}
+        if target_norm and target_norm in link_title_norms:
+            continue
+        for candidate in candidates:
+            if not candidate or candidate.casefold() in seen:
+                continue
+            seen.add(candidate.casefold())
+            replacements.append((candidate, record["markup"]))
+    replacements.sort(key=lambda item: len(item[0]), reverse=True)
+    if not replacements:
+        return markdown
+
+    parts = re.split(r"(\[\[[^\]]+\]\])", markdown)
+    for idx in range(0, len(parts), 2):
+        segment = parts[idx]
+        for label, markup in replacements:
+            segment = boundary_pattern(label).sub(markup, segment)
+        parts[idx] = segment
+    return "".join(parts)
+
+
+def wikilink_target_present(markdown: str, record: dict[str, str]) -> bool:
+    wanted = record["target"].strip().casefold()
+    if not wanted:
+        return False
+    for existing in extract_wikilink_records(markdown):
+        if existing["target"].strip().casefold() == wanted:
+            return True
+    return False
+
+
+def normalize_preserve_link_records(update: dict[str, Any], source_records: list[dict[str, str]]) -> list[dict[str, str]]:
+    requested = update.get("preserve_links", update.get("source_links", []))
+    if not isinstance(requested, list):
+        return []
+    records: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in requested:
+        value = str(item).strip()
+        if not value:
+            continue
+        if value.startswith("[[") and value.endswith("]]"):
+            value = value[2:-2].strip()
+        target, display = wikilink_display_target(value)
+        for record in source_records:
+            if (
+                record["target"].strip().casefold() == target.casefold()
+                or record["display"].strip().casefold() == display.casefold()
+                or record["target"].strip().casefold() == value.casefold()
+            ):
+                if record["markup"] not in seen:
+                    records.append(record)
+                    seen.add(record["markup"])
+                break
+    return records
+
+
+def required_wikilink_records(
+    source_text: str,
+    source_topic: str,
+    target_title: str,
+    update: dict[str, Any],
+) -> list[dict[str, str]]:
+    source_records = extract_wikilink_records(source_text)
+    if not source_records:
+        return []
+    required: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add(record: dict[str, str]) -> None:
+        if record_matches_title(record, target_title):
+            return
+        if record["markup"] in seen:
+            return
+        required.append(record)
+        seen.add(record["markup"])
+
+    if source_topic.strip().casefold() == target_title.strip().casefold():
+        for record in source_records:
+            add(record)
+
+    by_markup = records_by_markup(source_records)
+    for line in source_text.splitlines():
+        line_records = line_wikilink_records(line, by_markup)
+        if any(record_matches_title(record, target_title) for record in line_records):
+            for record in line_records:
+                add(record)
+
+    for record in normalize_preserve_link_records(update, source_records):
+        add(record)
+
+    return required
+
+
+def strip_self_wikilinks(line: str, target_title: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        raw = match.group(1).strip()
+        target, display = wikilink_display_target(raw)
+        record = {"target": target, "display": display, "markup": f"[[{raw}]]"}
+        if record_matches_title(record, target_title):
+            return display
+        return match.group(0)
+
+    return re.sub(r"\[\[([^\]]+)\]\]", replace, line)
+
+
+def append_missing_wikilink_context(
+    markdown: str,
+    source_text: str,
+    target_title: str,
+    required: list[dict[str, str]],
+) -> str:
+    missing = [record for record in required if not wikilink_target_present(markdown, record)]
+    if not missing:
+        return markdown
+
+    missing_targets = {record["target"].strip().casefold() for record in missing}
+    by_markup = records_by_markup(extract_wikilink_records(source_text))
+    context_lines: list[str] = []
+    seen_lines: set[str] = set()
+    for line in source_text.splitlines():
+        line_records = line_wikilink_records(line, by_markup)
+        if not any(record["target"].strip().casefold() in missing_targets for record in line_records):
+            continue
+        cleaned = strip_self_wikilinks(line.rstrip(), target_title)
+        if cleaned.strip() and cleaned.strip() not in seen_lines and cleaned.strip() not in markdown:
+            context_lines.append(cleaned)
+            seen_lines.add(cleaned.strip())
+
+    if not context_lines:
+        return markdown
+    return normalize_markdown_block(markdown.rstrip() + "\n" + "\n".join(context_lines))
+
+
+def clean_update_notes(
+    markdown: str,
+    spec: VaultSpec,
+    source_text: str,
+    source_topic: str,
+    target_title: str,
+    update: dict[str, Any],
+) -> str:
+    cleaned = strip_config_section_headings(markdown, spec)
+    cleaned = restore_source_wikilinks(cleaned, source_text, target_title)
+    required = required_wikilink_records(source_text, source_topic, target_title, update)
+    cleaned = append_missing_wikilink_context(cleaned, source_text, target_title, required)
+    return normalize_markdown_block(cleaned)
 
 
 def summary_source(text: str, spec: VaultSpec) -> str:
@@ -919,7 +1151,11 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
             "Set coverage to complete only when all useful source content is represented in updates "
             "or explicitly ignored as not durable knowledge. Otherwise set coverage to partial or skipped "
             "with a compact reason. Follow operating_rules when choosing target titles. Follow "
-            "language_policy for generated prose. Do not create relationship links."
+            "language_policy for generated prose. Preserve existing source wikilinks in notes_markdown. "
+            "If notes_markdown is paraphrased, keep source wikilinks on the corresponding names. "
+            "Use preserve_links for source wikilinks that must remain connected to this update even "
+            "when no separate target note is created. Do not create relationship links that were not "
+            "present in the source."
         ),
         "language_policy": spec.language_policy,
         "operating_rules": spec.operating_rules,
@@ -937,6 +1173,7 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
                     "target_title": "New title",
                     "type": "configured type unless fallback",
                     "notes_markdown": "Relevant source content to append under user_notes",
+                    "preserve_links": ["[[source wikilink that should remain connected to this update]]"],
                     "reason": "required when skipped",
                 }
             ],
@@ -968,9 +1205,12 @@ def cmd_meeting_tasks(args: argparse.Namespace) -> int:
             "return updates. Meeting notes are never deleted or renamed. If has_summary_placeholder is "
             "true, also return source_summary as one useful paragraph for the meeting itself. Return an "
             "update only when source text clearly belongs to that topic. The notes_markdown may be "
-            "shortened or paraphrased, but preserve useful Markdown structure. Follow operating_rules "
-            "when choosing target titles. Follow language_policy for generated prose. Do not create "
-            "relationship links."
+            "shortened or paraphrased, but preserve useful Markdown structure and existing source "
+            "wikilinks. If notes_markdown is paraphrased, keep source wikilinks on the corresponding "
+            "names. Use preserve_links for source wikilinks that must remain connected to this update "
+            "even when no separate target note is created. Follow operating_rules when choosing target "
+            "titles. Follow language_policy for generated prose. Do not create relationship links "
+            "that were not present in the source."
         ),
         "language_policy": spec.language_policy,
         "operating_rules": spec.operating_rules,
@@ -989,6 +1229,7 @@ def cmd_meeting_tasks(args: argparse.Namespace) -> int:
                     "target_title": "New title",
                     "type": "configured type unless fallback",
                     "notes_markdown": "Relevant excerpt for this link",
+                    "preserve_links": ["[[source wikilink that should remain connected to this update]]"],
                     "reason": "required when skipped",
                 }
             ],
@@ -1066,6 +1307,11 @@ def apply_source_update(
     target, error, created = ensure_target_note(vault, spec, update)
     if error or not target:
         return None, {"source": source_rel, "topic": topic, "reason": error or "target error"}
+    source_text = read_text(safe_vault_path(vault, source_rel))
+    source_topic = Path(source_rel).stem
+    notes = clean_update_notes(notes, spec, source_text, source_topic, target.stem, update)
+    if not notes:
+        return None, {"source": source_rel, "topic": topic, "reason": "empty notes_markdown after cleanup"}
     text = read_text(target)
     block = build_dated_block(notes, heading)
     new_text, changed, error = replace_placeholder_or_section(text, spec.sections["user_notes"], block, append=True)
