@@ -108,13 +108,21 @@ class Runner:
             raise RuntimeError(f"codex binary is not available on PATH: {codex_bin}")
         self.run_dir.mkdir(parents=True, exist_ok=True)
 
-    def run_command(self, name: str, command: list[str], stdout_path: Path | None = None) -> str:
-        self.log(f"START {name}: {shlex.join(command)}")
+    def run_command(
+        self,
+        name: str,
+        command: list[str],
+        stdout_path: Path | None = None,
+        input_text: str | None = None,
+    ) -> str:
+        stdin_note = f" stdin_chars={len(input_text)}" if input_text is not None else ""
+        self.log(f"START {name}: {shlex.join(command)}{stdin_note}")
         completed = subprocess.run(
             command,
             cwd=str(self.vault),
             text=True,
             encoding="utf-8",
+            input=input_text,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=self.timeout,
@@ -152,8 +160,8 @@ class Runner:
         raw_path = self.run_dir / f"{name}.raw.txt"
         prompt_path = self.run_dir / f"{name}.prompt.txt"
         prompt_path.write_text(prompt, encoding="utf-8")
-        command = [codex_bin, *codex_args, prompt]
-        raw = self.run_command(name, command, stdout_path=raw_path)
+        command = [codex_bin, *codex_args]
+        raw = self.run_command(name, command, stdout_path=raw_path, input_text=prompt)
         payload = extract_json(raw)
         validate_codex_payload(payload, expected_key)
         write_json(output_path, payload)

@@ -9,6 +9,7 @@ n8n should not contain vault-ingest logic. It should call the runner over SSH, p
 - Reads the vault `Config.md`.
 - Builds queue and meeting ingest tasks with the deterministic vault engine.
 - Calls Codex CLI in non-interactive mode to produce JSON ingest plans and summaries.
+- Sends large Codex prompts through stdin, not command-line arguments.
 - Applies plans and summaries with the deterministic engine.
 - Finalizes queue note deletion only after target summaries are current.
 - Writes run artifacts under a local state directory.
