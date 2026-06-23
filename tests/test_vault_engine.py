@@ -110,6 +110,50 @@ class VaultEngineTests(unittest.TestCase):
             self.assertEqual(finalized["deleted"], ["Inbox/Queue/Composite source.md"])
             self.assertFalse(source.exists())
 
+    def test_source_task_payload_is_compact_and_prunes_weak_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            exact = vault / "Knowledge" / "Projects" / "Alpha.md"
+            exact.write_text(
+                "---\n"
+                "type: project\n"
+                "---\n"
+                "# Alpha\n\n"
+                "## Summary\n"
+                "{agent_summary}\n\n"
+                "## My notes\n"
+                "- Exact target.\n",
+                encoding="utf-8",
+            )
+            weak = vault / "Knowledge" / "Projects" / "Weak Candidate.md"
+            weak.write_text(
+                "---\n"
+                "type: project\n"
+                "---\n"
+                "# Weak Candidate\n\n"
+                "## Summary\n"
+                "{agent_summary}\n\n"
+                "## My notes\n"
+                "- Mentions Alpha only once in the body.\n",
+                encoding="utf-8",
+            )
+            source = vault / "Inbox" / "Queue" / "Alpha.md"
+            source.write_text("- Update [[Alpha]].\n", encoding="utf-8")
+
+            tasks = self.run_engine(vault, "queue-tasks", "--limit", "10")
+            task = tasks["tasks"][0]
+            self.assertIn("allowed_types", tasks)
+            self.assertIn("fallback_folder", tasks)
+            self.assertNotIn("allowed_types", task)
+            self.assertNotIn("fallback_folder", task)
+            self.assertNotIn("candidate_targets", task)
+
+            candidates = task["topic_candidates"][0]["candidate_targets"]
+            self.assertEqual([candidate["title"] for candidate in candidates], ["Alpha"])
+            self.assertEqual(candidates[0]["match"], "exact")
+            self.assertEqual(set(candidates[0]), {"path", "title", "type", "score", "match"})
+
     def test_source_wikilinks_are_preserved_when_llm_returns_plain_text(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)

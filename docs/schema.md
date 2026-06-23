@@ -86,7 +86,6 @@ Important task fields:
 - `source`: path to the source note;
 - `template_type`: configured type from frontmatter, when present;
 - `topic_candidates`: filename topic plus wikilinks, each with candidate targets;
-- `candidate_targets`: source-level retrieval candidates;
 - `source_text`: full source text unless it exceeds the configured limit;
 - `has_summary_placeholder`: meeting-only flag;
 - `language_policy`: task-level language rules;
@@ -123,6 +122,8 @@ For meetings, use `source_policy: keep_and_mark_processed`. If `has_summary_plac
 `notes_markdown` should keep source wikilinks on the corresponding names. If the LLM paraphrases text and a source wikilink must remain connected to the update, include it in `preserve_links`. The engine may restore missing source wikilinks from exact names, and may append source lines that contain required wikilinks so the graph relationship is not silently lost.
 
 `coverage` must be `complete` only when all useful source text was transferred or explicitly ignored as non-durable knowledge.
+
+Candidate targets are intentionally compact. Exact title/path matches are kept regardless of score. Non-exact candidates below `candidate_min_score` are omitted, and each topic gets at most `candidate_targets_per_topic` candidates.
 
 ## Templates
 

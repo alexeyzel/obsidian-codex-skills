@@ -44,8 +44,8 @@ Optional overrides:
 ```bash
 export CODEX_BIN="$HOME/.local/bin/codex"
 export CODEX_ARGS='exec --skip-git-repo-check --sandbox read-only'
-export QUEUE_LIMIT=20
-export MEETING_LIMIT=20
+export QUEUE_LIMIT=10
+export MEETING_LIMIT=10
 export SUMMARY_LIMIT=50
 export MAX_CODEX_PROMPT_CHARS=120000
 export RUNNER_STEP_TIMEOUT=1800

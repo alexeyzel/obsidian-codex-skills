@@ -387,6 +387,8 @@ def load_spec(vault: Path, config_path: str | None = None) -> VaultSpec:
     limits = {
         "max_llm_input_chars": 60000,
         "search_candidates": 8,
+        "candidate_targets_per_topic": 3,
+        "candidate_min_score": 10,
         "meeting_prep_context_notes": 5,
     }
     for row in parse_markdown_table(text, "Processing Limits"):
@@ -1021,6 +1023,46 @@ def candidate_search(vault: Path, spec: VaultSpec, query: str, *, knowledge_only
     return results[:limit]
 
 
+def candidate_identity_values(page: dict[str, Any]) -> set[str]:
+    values = {
+        str(page.get("title", "")),
+        Path(str(page.get("path", ""))).stem,
+        str(page.get("path", ""))[:-3] if str(page.get("path", "")).endswith(".md") else str(page.get("path", "")),
+    }
+    return {value.strip().casefold() for value in values if value.strip()}
+
+
+def exact_candidate_matches(vault: Path, spec: VaultSpec, query: str) -> list[dict[str, Any]]:
+    wanted = query.strip().casefold()
+    if not wanted:
+        return []
+    matches: list[dict[str, Any]] = []
+    for page in scan_pages(vault, spec, include_text=False):
+        if not page_in_knowledge(vault, spec, page):
+            continue
+        if wanted in candidate_identity_values(page):
+            item = dict(page)
+            item["score"] = max(score_page(page, query, ""), 1000)
+            item["match"] = "exact"
+            matches.append(item)
+    matches.sort(key=lambda item: item["path"].lower())
+    return matches
+
+
+def compact_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {
+        "path": candidate.get("path", ""),
+        "title": candidate.get("title", ""),
+        "type": candidate.get("type", ""),
+        "score": candidate.get("score", 0),
+    }
+    if candidate.get("match"):
+        compact["match"] = candidate["match"]
+    if candidate.get("calendar_title"):
+        compact["calendar_title"] = candidate["calendar_title"]
+    return compact
+
+
 def build_human_index(vault: Path, spec: VaultSpec, pages: list[dict[str, Any]]) -> str:
     lines = ["# Vault Index", ""]
     for page in pages:
@@ -1170,12 +1212,18 @@ def allowed_type_items(spec: VaultSpec) -> list[dict[str, str]]:
 
 def collect_candidate_targets(vault: Path, spec: VaultSpec, queries: list[str], *, limit: int | None = None) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
-    candidate_limit = limit or spec.limits["search_candidates"]
+    candidate_limit = limit or spec.limits.get("candidate_targets_per_topic", 3)
+    search_limit = max(spec.limits.get("search_candidates", 8), candidate_limit)
+    min_score = spec.limits.get("candidate_min_score", 10)
     for query in queries:
         if not query:
             continue
-        for candidate in candidate_search(vault, spec, query, knowledge_only=True, limit=candidate_limit):
-            candidates.setdefault(candidate["path"], candidate)
+        for candidate in exact_candidate_matches(vault, spec, query):
+            candidates.setdefault(candidate["path"], compact_candidate(candidate))
+        for candidate in candidate_search(vault, spec, query, knowledge_only=True, limit=search_limit):
+            if int(candidate.get("score", 0)) < min_score:
+                continue
+            candidates.setdefault(candidate["path"], compact_candidate(candidate))
     return list(candidates.values())[:candidate_limit]
 
 
@@ -1196,7 +1244,6 @@ def build_source_task(vault: Path, spec: VaultSpec, source: Path, *, source_kind
                 "candidate_targets": collect_candidate_targets(vault, spec, [link]),
             }
         )
-    queries = [source.stem, title, *links]
     summary = spec.sections["summary"]
     task: dict[str, Any] = {
         "kind": "source",
@@ -1206,10 +1253,7 @@ def build_source_task(vault: Path, spec: VaultSpec, source: Path, *, source_kind
         "title": source.stem,
         "display_title": title,
         "template_type": template_type,
-        "allowed_types": allowed_type_items(spec),
-        "fallback_folder": spec.folders["fallback"].path,
         "topic_candidates": topic_candidates,
-        "candidate_targets": collect_candidate_targets(vault, spec, queries),
         "source_text": text if not source_too_large(text, spec) else "",
         "error": "source exceeds max_llm_input_chars" if source_too_large(text, spec) else None,
     }
@@ -1240,7 +1284,9 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
             "identify every topic that has useful transferable knowledge, resolve target notes, and "
             "return updates. A queue source may produce zero, one, or many updates. If template_type "
             "is present, use it for the source filename topic when that topic becomes a new note; do "
-            "not reclassify that topic. For linked topics, choose a configured type, fallback, or skip. "
+            "not reclassify that topic. Use top-level allowed_types and fallback_folder. For linked "
+            "topics, choose a configured type, fallback, or skip. Resolve existing notes from "
+            "topic_candidates[].candidate_targets only when identity is clear. "
             "Set coverage to complete only when all useful source content is represented in updates "
             "or explicitly ignored as not durable knowledge. Otherwise set coverage to partial or skipped "
             "with a compact reason. Follow operating_rules when choosing target titles. Follow "
@@ -1252,6 +1298,8 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
         ),
         "language_policy": spec.language_policy,
         "operating_rules": spec.operating_rules,
+        "allowed_types": allowed_type_items(spec),
+        "fallback_folder": spec.folders["fallback"].path,
         "action_schema": {
             "kind": "source",
             "source": "Inbox/Queue/example.md",
@@ -1300,13 +1348,17 @@ def cmd_meeting_tasks(args: argparse.Namespace) -> int:
             "update only when source text clearly belongs to that topic. The notes_markdown may be "
             "shortened or paraphrased, but preserve useful Markdown structure and existing source "
             "wikilinks. If notes_markdown is paraphrased, keep source wikilinks on the corresponding "
-            "names. Use preserve_links for source wikilinks that must remain connected to this update "
-            "even when no separate target note is created. Follow operating_rules when choosing target "
+            "names. Use top-level allowed_types and fallback_folder. Resolve existing notes from "
+            "topic_candidates[].candidate_targets only when identity is clear. Use preserve_links for "
+            "source wikilinks that must remain connected to this update even when no separate target "
+            "note is created. Follow operating_rules when choosing target "
             "titles. Follow language_policy for generated prose. Do not create relationship links "
             "that were not present in the source."
         ),
         "language_policy": spec.language_policy,
         "operating_rules": spec.operating_rules,
+        "allowed_types": allowed_type_items(spec),
+        "fallback_folder": spec.folders["fallback"].path,
         "action_schema": {
             "kind": "source",
             "source": "Meetings/example.md",

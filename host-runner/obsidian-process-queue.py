@@ -508,8 +508,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vault", default=str(DEFAULT_VAULT))
     parser.add_argument("--engine", default=str(DEFAULT_ENGINE))
     parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR))
-    parser.add_argument("--queue-limit", type=int, default=int(os.environ.get("QUEUE_LIMIT", "20")))
-    parser.add_argument("--meeting-limit", type=int, default=int(os.environ.get("MEETING_LIMIT", "20")))
+    parser.add_argument("--queue-limit", type=int, default=int(os.environ.get("QUEUE_LIMIT", "10")))
+    parser.add_argument("--meeting-limit", type=int, default=int(os.environ.get("MEETING_LIMIT", "10")))
     parser.add_argument("--summary-limit", type=int, default=int(os.environ.get("SUMMARY_LIMIT", "50")))
     parser.add_argument("--timeout", type=int, default=int(os.environ.get("RUNNER_STEP_TIMEOUT", "1800")))
     parser.add_argument(
