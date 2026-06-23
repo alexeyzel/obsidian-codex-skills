@@ -26,4 +26,6 @@ Procedure:
 
 4. Report created folders, templates, and service state.
 
+Setup also creates or updates `.obsidian/graph.json` according to the `Obsidian Graph` table in `Config.md`. By default, graph view shows only the configured `knowledge` and `meetings` folder roles.
+
 Do not overwrite templates unless the user explicitly asks; then pass `--overwrite-templates`.

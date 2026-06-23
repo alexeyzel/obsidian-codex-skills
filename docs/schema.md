@@ -142,3 +142,14 @@ Meeting templates should include:
 ```
 
 Users may rename headings or change template layout as long as `Config.md` points the engine to the right section names.
+
+## Obsidian Graph
+
+The optional `Obsidian Graph` table controls graph view setup during `init`.
+
+Supported settings:
+
+- `manage_graph_search`: `yes` or `no`;
+- `visible_folder_roles`: comma-separated folder roles to include in graph view.
+
+By default, the engine writes `.obsidian/graph.json` with a search query that includes only `knowledge` and `meetings`. It preserves existing graph settings and updates only `search`. Set `manage_graph_search` to `no` if you want to manage graph view search manually.

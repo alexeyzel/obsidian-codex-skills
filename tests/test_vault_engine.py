@@ -495,6 +495,49 @@ class VaultEngineTests(unittest.TestCase):
             self.assertTrue((vault / "_Service" / "Tmpl" / "person.md").exists())
             self.assertFalse((vault / "_Service" / "Templates" / "person.md").exists())
 
+    def test_init_configures_obsidian_graph_search_for_knowledge_and_meetings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+
+            graph = json.loads((vault / ".obsidian" / "graph.json").read_text(encoding="utf-8"))
+            self.assertEqual(graph["search"], '(path:"Knowledge" OR path:"Meetings")')
+            self.assertFalse(graph["showTags"])
+
+    def test_graph_search_uses_configured_folder_paths_and_preserves_existing_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            local_config = vault / "Config.md"
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("| knowledge | Knowledge |", "| knowledge | Знання |")
+            config_text = config_text.replace("| meetings | Meetings |", "| meetings | Зустрічі |")
+            local_config.write_text(config_text, encoding="utf-8")
+            graph_path = vault / ".obsidian" / "graph.json"
+            graph_path.parent.mkdir(parents=True, exist_ok=True)
+            graph_path.write_text(
+                json.dumps({"search": "old", "showTags": True, "scale": 2}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            self.run_engine(vault, "init", "--config", str(local_config))
+
+            graph = json.loads(graph_path.read_text(encoding="utf-8"))
+            self.assertEqual(graph["search"], '(path:"Знання" OR path:"Зустрічі")')
+            self.assertTrue(graph["showTags"])
+            self.assertEqual(graph["scale"], 2)
+
+    def test_graph_search_management_can_be_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            local_config = vault / "Config.md"
+            config_text = CONFIG.read_text(encoding="utf-8")
+            config_text = config_text.replace("| manage_graph_search | yes |", "| manage_graph_search | no |")
+            local_config.write_text(config_text, encoding="utf-8")
+
+            self.run_engine(vault, "init", "--config", str(local_config))
+
+            self.assertFalse((vault / ".obsidian" / "graph.json").exists())
+
     def test_meeting_template_uses_configured_meeting_section_headings(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)

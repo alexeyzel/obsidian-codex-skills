@@ -91,6 +91,8 @@ python "$ENGINE" init --vault /path/to/vault
 python "$ENGINE" index --vault /path/to/vault
 ```
 
+By default, `init` also creates or updates `.obsidian/graph.json` so graph view shows only the configured `knowledge` and `meetings` folder roles. Edit `Obsidian Graph` in the vault's `Config.md` to change or disable this.
+
 ## Source Ingest
 
 Queue notes and meeting notes share the same plan schema. The entrypoint commands below only choose the source folder and policy.

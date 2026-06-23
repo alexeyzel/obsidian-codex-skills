@@ -33,6 +33,7 @@ The engine reads tables from `Config.md`:
 - `Meeting Sections`: headings used when generating the default meeting template.
 - `Language Policy`: generated prose and summary language.
 - `Templates`: template files for new notes.
+- `Obsidian Graph`: graph view search filter managed during setup.
 - `Processing Limits`: safeguards for context size and batch size.
 
 Paths are intentionally parent-aware so a human does not have to repeat root folder names:
@@ -159,6 +160,8 @@ cp Config.md /path/to/vault/Config.md
 # Edit /path/to/vault/Config.md before init if you want different language, folders, sections, or knowledge types.
 python "$ENGINE" init --vault /path/to/vault
 ```
+
+By default, setup also configures `.obsidian/graph.json` so Obsidian graph view shows only the configured `knowledge` and `meetings` folders. Change `Obsidian Graph` in `Config.md` if you want different visible folder roles or manual graph search management.
 
 Rebuild cache and index:
 

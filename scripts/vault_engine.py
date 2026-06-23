@@ -75,6 +75,7 @@ class VaultSpec:
     language_policy: list[dict[str, str]]
     operating_rules: list[str]
     templates: dict[str, TemplateSpec]
+    graph_settings: dict[str, str]
     limits: dict[str, int]
 
 
@@ -373,6 +374,16 @@ def load_spec(vault: Path, config_path: str | None = None) -> VaultSpec:
 
     templates = raw_templates
 
+    graph_settings = {
+        "manage_graph_search": "yes",
+        "visible_folder_roles": "knowledge, meetings",
+    }
+    for row in parse_markdown_table(text, "Obsidian Graph"):
+        setting = normalize_key(row.get("setting", ""))
+        value = row.get("value", "").strip()
+        if setting and value:
+            graph_settings[setting] = value
+
     limits = {
         "max_llm_input_chars": 60000,
         "search_candidates": 8,
@@ -383,7 +394,18 @@ def load_spec(vault: Path, config_path: str | None = None) -> VaultSpec:
         if setting:
             limits[setting] = parse_int(row.get("value", ""), limits.get(setting, 1))
 
-    return VaultSpec(path, folders, types, sections, meeting_sections, language_policy, operating_rules, templates, limits)
+    return VaultSpec(
+        path,
+        folders,
+        types,
+        sections,
+        meeting_sections,
+        language_policy,
+        operating_rules,
+        templates,
+        graph_settings,
+        limits,
+    )
 
 
 def folder_path(vault: Path, spec: VaultSpec, role: str) -> Path:
@@ -1013,6 +1035,74 @@ def rebuild_index(vault: Path, spec: VaultSpec) -> dict[str, Any]:
     return {"pages": len(pages), "cache": rel_to(vault, cache_path(vault, spec))}
 
 
+def graph_setting_enabled(spec: VaultSpec, setting: str) -> bool:
+    value = spec.graph_settings.get(setting, "").strip().casefold()
+    return value not in {"", "0", "false", "no", "off", "disabled"}
+
+
+def graph_visible_roles(spec: VaultSpec) -> list[str]:
+    raw = spec.graph_settings.get("visible_folder_roles", "knowledge, meetings")
+    roles: list[str] = []
+    for part in re.split(r"[,/]", raw):
+        role = normalize_key(part)
+        if role and role in spec.folders and role not in roles:
+            roles.append(role)
+    return roles
+
+
+def quote_obsidian_search_value(value: str) -> str:
+    return '"' + value.replace("\\", "/").replace('"', '\\"') + '"'
+
+
+def graph_search_query(spec: VaultSpec) -> str:
+    terms = [f"path:{quote_obsidian_search_value(spec.folders[role].path)}" for role in graph_visible_roles(spec)]
+    if not terms:
+        return ""
+    if len(terms) == 1:
+        return terms[0]
+    return "(" + " OR ".join(terms) + ")"
+
+
+def default_graph_config(search: str) -> dict[str, Any]:
+    return {
+        "collapse-filter": True,
+        "search": search,
+        "showTags": False,
+        "showAttachments": False,
+        "hideUnresolved": False,
+        "showOrphans": True,
+        "collapse-color-groups": True,
+        "colorGroups": [],
+        "collapse-display": True,
+        "showArrow": False,
+        "textFadeMultiplier": 0,
+        "nodeSizeMultiplier": 1,
+        "lineSizeMultiplier": 1,
+        "collapse-forces": True,
+        "centerStrength": 0.518713248970312,
+        "repelStrength": 10,
+        "linkStrength": 1,
+        "linkDistance": 250,
+        "scale": 1,
+        "close": False,
+    }
+
+
+def configure_obsidian_graph(vault: Path, spec: VaultSpec) -> str | None:
+    if not graph_setting_enabled(spec, "manage_graph_search"):
+        return None
+    search = graph_search_query(spec)
+    graph_path = vault / ".obsidian" / "graph.json"
+    existing = load_json(graph_path, {})
+    graph = existing if isinstance(existing, dict) else {}
+    if not graph:
+        graph = default_graph_config(search)
+    else:
+        graph["search"] = search
+    write_json(graph_path, graph)
+    return rel_to(vault, graph_path)
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     vault = Path(args.vault).expanduser().resolve()
     spec = load_spec(vault, args.config)
@@ -1045,6 +1135,9 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     write_json(state_path(vault, spec, "queue.json"), load_json(state_path(vault, spec, "queue.json"), {}))
     write_json(state_path(vault, spec, "summaries.json"), load_json(state_path(vault, spec, "summaries.json"), {}))
+    graph_config = configure_obsidian_graph(vault, spec)
+    if graph_config:
+        created.append(graph_config)
     print(json.dumps({"created_or_checked": sorted(set(created)), "config": str(spec.config_path)}, ensure_ascii=False, indent=2))
     return 0
 

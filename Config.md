@@ -90,6 +90,17 @@ Path rule: `Path` is written relative to the configured `service` folder.
 | knowledge_default | Templates/knowledge.md | Path relative to `service`. Used for fallback notes and as a backup when a type template is missing. |
 | meeting | Templates/meeting.md | Path relative to `service`. Used by the meeting preparation skill. |
 
+## Obsidian Graph
+
+Human editing note: you may change `Value` values. Keep `Setting` values unchanged unless you also update the agent/engine.
+
+Agent rule: during vault setup, update `.obsidian/graph.json` so Obsidian graph view shows only the configured folder roles listed here. Preserve other existing graph settings.
+
+| Setting | Value | Rules |
+|---|---|---|
+| manage_graph_search | yes | Set to `no` if you want to manage Obsidian graph search manually. |
+| visible_folder_roles | knowledge, meetings | Comma-separated folder roles to include in graph view. |
+
 ## Processing Limits
 
 Human editing note: adjust these values for your model context window and vault size.
