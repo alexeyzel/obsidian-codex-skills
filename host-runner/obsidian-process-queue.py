@@ -13,6 +13,7 @@ It prints one JSON document to stdout for n8n.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as dt
 import fcntl
 import json
@@ -188,6 +189,62 @@ class Runner:
             + json.dumps(summary_payload, ensure_ascii=False)
         )
 
+    def fit_plan_payloads(
+        self,
+        queue_payload: dict[str, Any],
+        meeting_payload: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, int]]:
+        queue_fit = copy.deepcopy(queue_payload)
+        meeting_fit = copy.deepcopy(meeting_payload)
+        queue_tasks = queue_fit.get("tasks", [])
+        meeting_tasks = meeting_fit.get("tasks", [])
+        if not isinstance(queue_tasks, list):
+            queue_fit["tasks"] = queue_tasks = []
+        if not isinstance(meeting_tasks, list):
+            meeting_fit["tasks"] = meeting_tasks = []
+
+        original_queue = len(queue_tasks)
+        original_meeting = len(meeting_tasks)
+        while len(self.make_plan_prompt(queue_fit, meeting_fit)) > self.max_codex_prompt_chars:
+            if queue_tasks:
+                queue_tasks.pop()
+            elif meeting_tasks:
+                meeting_tasks.pop()
+            else:
+                break
+
+        fitted_chars = len(self.make_plan_prompt(queue_fit, meeting_fit))
+        if fitted_chars > self.max_codex_prompt_chars:
+            raise RuntimeError(
+                f"codex-ingest-plan prompt is too large even with an empty batch: "
+                f"{fitted_chars} chars; limit is {self.max_codex_prompt_chars}"
+            )
+        if (not queue_tasks and not meeting_tasks) and (original_queue or original_meeting):
+            raise RuntimeError(
+                f"codex-ingest-plan prompt is too large for even one source task; "
+                f"limit is {self.max_codex_prompt_chars}. Reduce max_llm_input_chars, "
+                "split the largest source note, or increase MAX_CODEX_PROMPT_CHARS."
+            )
+
+        stats = {
+            "original_queue_tasks": original_queue,
+            "original_meeting_tasks": original_meeting,
+            "used_queue_tasks": len(queue_tasks),
+            "used_meeting_tasks": len(meeting_tasks),
+            "deferred_queue_tasks": original_queue - len(queue_tasks),
+            "deferred_meeting_tasks": original_meeting - len(meeting_tasks),
+            "prompt_chars": fitted_chars,
+        }
+        if stats["deferred_queue_tasks"] or stats["deferred_meeting_tasks"]:
+            self.log(
+                "FIT codex-ingest-plan "
+                f"prompt_chars={stats['prompt_chars']} "
+                f"queue={stats['used_queue_tasks']}/{stats['original_queue_tasks']} "
+                f"meeting={stats['used_meeting_tasks']}/{stats['original_meeting_tasks']} "
+                f"limit={self.max_codex_prompt_chars}"
+            )
+        return queue_fit, meeting_fit, stats
+
     def run(self) -> dict[str, Any]:
         self.preflight()
 
@@ -208,6 +265,11 @@ class Runner:
 
         queue_payload = read_json(queue_tasks_path)
         meeting_payload = read_json(meeting_tasks_path)
+        queue_payload, meeting_payload, fit_stats = self.fit_plan_payloads(queue_payload, meeting_payload)
+        if fit_stats["deferred_queue_tasks"] or fit_stats["deferred_meeting_tasks"]:
+            write_json(self.run_dir / "queue-tasks-used.json", queue_payload)
+            write_json(self.run_dir / "meeting-tasks-used.json", meeting_payload)
+            write_json(self.run_dir / "fit-plan-payloads.json", fit_stats)
         queue_count = count_tasks(queue_payload)
         meeting_count = count_tasks(meeting_payload)
 
@@ -271,6 +333,11 @@ class Runner:
             "counts": {
                 "queue_tasks": queue_count,
                 "meeting_tasks": meeting_count,
+                "available_queue_tasks": fit_stats["original_queue_tasks"],
+                "available_meeting_tasks": fit_stats["original_meeting_tasks"],
+                "deferred_queue_tasks": fit_stats["deferred_queue_tasks"],
+                "deferred_meeting_tasks": fit_stats["deferred_meeting_tasks"],
+                "ingest_plan_prompt_chars": fit_stats["prompt_chars"],
                 "summary_tasks": summary_count,
                 "processed_files": len(collect_sources(apply_result)),
                 "created_notes": len(created_notes),

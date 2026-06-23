@@ -50,6 +50,14 @@ export MAX_CODEX_PROMPT_CHARS=120000
 export RUNNER_STEP_TIMEOUT=1800
 ```
 
+If the ingest-plan prompt would exceed `MAX_CODEX_PROMPT_CHARS`, the runner automatically uses a smaller batch for that run and leaves the remaining queue or meeting tasks for the next run. When this happens, it writes:
+
+- `queue-tasks-used.json`;
+- `meeting-tasks-used.json`;
+- `fit-plan-payloads.json`.
+
+The JSON result also includes `available_*`, `deferred_*`, and `ingest_plan_prompt_chars` counters under `counts`.
+
 ## Smoke Test
 
 ```bash
