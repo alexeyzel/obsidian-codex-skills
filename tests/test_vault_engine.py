@@ -597,9 +597,9 @@ class VaultEngineTests(unittest.TestCase):
             self.run_engine(vault, "init", "--config", str(local_config))
 
             meeting_template = (vault / "Service" / "Templates" / "meeting.md").read_text(encoding="utf-8")
-            self.assertIn('date: "{{date}}"', meeting_template)
+            self.assertIn("date: {{date:YYYY-MM-DD}}", meeting_template)
             self.assertIn('calendar_title: "{calendar_title}"', meeting_template)
-            self.assertIn("# {{date}} - {title}", meeting_template)
+            self.assertIn("# {{date:YYYY-MM-DD}} - {title}", meeting_template)
             self.assertIn("## Brief\n{agent_summary}", meeting_template)
             self.assertIn("## Before Call\n-", meeting_template)
             self.assertIn("## Notes\n-", meeting_template)

@@ -881,7 +881,7 @@ def summary_source(text: str, spec: VaultSpec) -> str:
 def render_template(template: str, values: dict[str, str]) -> str:
     rendered = template
     for key, value in values.items():
-        rendered = re.sub(r"\{\{\s*" + re.escape(key) + r"\s*\}\}", value, rendered)
+        rendered = re.sub(r"\{\{\s*" + re.escape(key) + r"(?:\s*:[^}]+)?\s*\}\}", value, rendered)
     for key, value in values.items():
         rendered = rendered.replace("{" + key + "}", value)
     return rendered
@@ -911,11 +911,11 @@ def default_meeting_template(spec: VaultSpec) -> str:
     return (
         "---\n"
         "type: meeting\n"
-        'date: "{{date}}"\n'
+        "date: {{date:YYYY-MM-DD}}\n"
         'calendar_title: "{calendar_title}"\n'
         "agent_processed: false\n"
         "---\n"
-        "# {{date}} - {title}\n\n"
+        "# {{date:YYYY-MM-DD}} - {title}\n\n"
         f"## {summary.heading}\n{summary.placeholder}\n\n"
         f"## {before}\n-\n\n"
         f"## {notes}\n-\n\n"
