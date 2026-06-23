@@ -43,21 +43,24 @@ Optional overrides:
 
 ```bash
 export CODEX_BIN="$HOME/.local/bin/codex"
-export CODEX_ARGS='exec --skip-git-repo-check --sandbox read-only'
+export CODEX_ARGS='exec --skip-git-repo-check --sandbox read-only --model gpt-5.4 -c model_reasoning_effort=medium'
 export QUEUE_LIMIT=10
 export MEETING_LIMIT=10
 export SUMMARY_LIMIT=50
 export MAX_CODEX_PROMPT_CHARS=120000
+export MAX_RUN_BATCHES=20
 export RUNNER_STEP_TIMEOUT=1800
 ```
 
-If the ingest-plan prompt would exceed `MAX_CODEX_PROMPT_CHARS`, the runner automatically uses a smaller batch for that run and leaves the remaining queue or meeting tasks for the next run. When this happens, it writes:
+If the ingest-plan prompt would exceed `MAX_CODEX_PROMPT_CHARS`, the runner automatically uses a smaller fitted batch and then continues with the next batch in the same run, up to `MAX_RUN_BATCHES`. This keeps one n8n execution as the normal operational boundary while still avoiding oversized Codex prompts.
+
+Per-batch artifacts are written under `batch-001/`, `batch-002/`, and so on. When a batch is fitted down, it writes:
 
 - `queue-tasks-used.json`;
 - `meeting-tasks-used.json`;
 - `fit-plan-payloads.json`.
 
-The JSON result also includes `available_*`, `deferred_*`, and `ingest_plan_prompt_chars` counters under `counts`.
+The JSON result also includes `batches`, `available_*`, `deferred_*`, `ingest_plan_prompt_chars`, `ingest_plan_prompt_chars_total`, and `batch_summaries` counters.
 
 ## Smoke Test
 

@@ -111,7 +111,7 @@ Agent rule: never silently exceed these limits. If a source cannot fit, leave it
 |---|---|
 | max_llm_input_chars | 60000 |
 | search_candidates | 8 |
-| candidate_targets_per_topic | 3 |
+| candidate_targets_per_topic | 5 |
 | candidate_min_score | 10 |
 | meeting_prep_context_notes | 5 |
 

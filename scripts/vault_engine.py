@@ -387,7 +387,7 @@ def load_spec(vault: Path, config_path: str | None = None) -> VaultSpec:
     limits = {
         "max_llm_input_chars": 60000,
         "search_candidates": 8,
-        "candidate_targets_per_topic": 3,
+        "candidate_targets_per_topic": 5,
         "candidate_min_score": 10,
         "meeting_prep_context_notes": 5,
     }
@@ -1212,7 +1212,7 @@ def allowed_type_items(spec: VaultSpec) -> list[dict[str, str]]:
 
 def collect_candidate_targets(vault: Path, spec: VaultSpec, queries: list[str], *, limit: int | None = None) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
-    candidate_limit = limit or spec.limits.get("candidate_targets_per_topic", 3)
+    candidate_limit = limit or spec.limits.get("candidate_targets_per_topic", 5)
     search_limit = max(spec.limits.get("search_candidates", 8), candidate_limit)
     min_score = spec.limits.get("candidate_min_score", 10)
     for query in queries:

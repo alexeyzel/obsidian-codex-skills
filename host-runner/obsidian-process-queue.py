@@ -32,8 +32,9 @@ DEFAULT_VAULT = Path(os.environ.get("OBSIDIAN_VAULT", str(Path.home() / "obsidia
 DEFAULT_ENGINE = Path.home() / ".codex/obsidian-knowledge-skills/scripts/vault_engine.py"
 DEFAULT_STATE_DIR = Path.home() / ".local/state/obsidian-process-queue"
 DEFAULT_CODEX_BIN = str(Path.home() / ".local/bin/codex")
-DEFAULT_CODEX_ARGS = "exec --skip-git-repo-check --sandbox read-only"
+DEFAULT_CODEX_ARGS = "exec --skip-git-repo-check --sandbox read-only --model gpt-5.4 -c model_reasoning_effort=medium"
 DEFAULT_MAX_CODEX_PROMPT_CHARS = 120000
+DEFAULT_MAX_RUN_BATCHES = 20
 
 
 def utc_now() -> str:
@@ -82,6 +83,7 @@ class Runner:
         self.summary_limit = args.summary_limit
         self.timeout = args.timeout
         self.max_codex_prompt_chars = args.max_codex_prompt_chars
+        self.max_run_batches = args.max_run_batches
         self.run_id = run_id()
         self.run_dir = self.state_dir / "runs" / self.run_id
         self.log_path = self.run_dir / "runner.log"
@@ -92,6 +94,11 @@ class Runner:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         line = f"{utc_now()} {message}\n"
         self.log_path.open("a", encoding="utf-8").write(line)
+
+    def batch_dir(self, batch: int) -> Path:
+        path = self.run_dir / f"batch-{batch:03d}"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     def preflight(self) -> None:
         if not self.vault.is_dir():
@@ -130,7 +137,8 @@ class Runner:
         )
         if stdout_path:
             stdout_path.write_text(completed.stdout, encoding="utf-8")
-        stderr_path = self.run_dir / f"{name}.stderr.txt"
+        stderr_parent = stdout_path.parent if stdout_path else self.run_dir
+        stderr_path = stderr_parent / f"{name}.stderr.txt"
         if completed.stderr:
             stderr_path.write_text(completed.stderr, encoding="utf-8")
         if completed.returncode != 0:
@@ -147,9 +155,17 @@ class Runner:
             stdout_path=stdout_path,
         )
 
-    def codex_cmd(self, name: str, prompt: str, output_path: Path, expected_key: str) -> dict[str, Any]:
+    def codex_cmd(
+        self,
+        name: str,
+        prompt: str,
+        output_path: Path,
+        expected_key: str,
+        artifact_dir: Path | None = None,
+    ) -> dict[str, Any]:
+        artifact_dir = artifact_dir or self.run_dir
         if len(prompt) > self.max_codex_prompt_chars:
-            prompt_path = self.run_dir / f"{name}.prompt-too-large.txt"
+            prompt_path = artifact_dir / f"{name}.prompt-too-large.txt"
             prompt_path.write_text(prompt, encoding="utf-8")
             raise RuntimeError(
                 f"{name} prompt is too large: {len(prompt)} chars; "
@@ -157,10 +173,12 @@ class Runner:
             )
         codex_bin = resolve_codex_bin()
         codex_args = shlex.split(os.environ.get("CODEX_ARGS", DEFAULT_CODEX_ARGS))
-        raw_path = self.run_dir / f"{name}.raw.txt"
-        prompt_path = self.run_dir / f"{name}.prompt.txt"
+        raw_path = artifact_dir / f"{name}.raw.txt"
+        prompt_path = artifact_dir / f"{name}.prompt.txt"
         prompt_path.write_text(prompt, encoding="utf-8")
         command = [codex_bin, *codex_args]
+        if command[-1] != "-":
+            command.append("-")
         raw = self.run_command(name, command, stdout_path=raw_path, input_text=prompt)
         payload = extract_json(raw)
         validate_codex_payload(payload, expected_key)
@@ -253,18 +271,23 @@ class Runner:
             )
         return queue_fit, meeting_fit, stats
 
-    def run(self) -> dict[str, Any]:
-        self.preflight()
+    def run_batch(self, batch: int) -> dict[str, Any]:
+        artifact_dir = self.batch_dir(batch)
+        batch_prefix = f"batch-{batch:03d}"
 
-        before_files = knowledge_files(self.vault)
+        self.engine_cmd(f"{batch_prefix}-index", "index")
 
-        self.engine_cmd("index", "index")
-
-        queue_tasks_path = self.run_dir / "queue-tasks.json"
-        meeting_tasks_path = self.run_dir / "meeting-tasks.json"
-        self.engine_cmd("queue-tasks", "queue-tasks", "--limit", str(self.queue_limit), stdout_path=queue_tasks_path)
+        queue_tasks_path = artifact_dir / "queue-tasks.json"
+        meeting_tasks_path = artifact_dir / "meeting-tasks.json"
         self.engine_cmd(
-            "meeting-tasks",
+            f"{batch_prefix}-queue-tasks",
+            "queue-tasks",
+            "--limit",
+            str(self.queue_limit),
+            stdout_path=queue_tasks_path,
+        )
+        self.engine_cmd(
+            f"{batch_prefix}-meeting-tasks",
             "meeting-tasks",
             "--limit",
             str(self.meeting_limit),
@@ -274,62 +297,130 @@ class Runner:
         queue_payload = read_json(queue_tasks_path)
         meeting_payload = read_json(meeting_tasks_path)
         queue_payload, meeting_payload, fit_stats = self.fit_plan_payloads(queue_payload, meeting_payload)
-        if fit_stats["deferred_queue_tasks"] or fit_stats["deferred_meeting_tasks"]:
-            write_json(self.run_dir / "queue-tasks-used.json", queue_payload)
-            write_json(self.run_dir / "meeting-tasks-used.json", meeting_payload)
-            write_json(self.run_dir / "fit-plan-payloads.json", fit_stats)
+        write_json(artifact_dir / "queue-tasks-used.json", queue_payload)
+        write_json(artifact_dir / "meeting-tasks-used.json", meeting_payload)
+        write_json(artifact_dir / "fit-plan-payloads.json", fit_stats)
+
         queue_count = count_tasks(queue_payload)
         meeting_count = count_tasks(meeting_payload)
 
         apply_result: dict[str, Any] = {"applied": [], "skipped": []}
         if queue_count or meeting_count:
-            plan_path = self.run_dir / "ingest-plan.json"
+            plan_path = artifact_dir / "ingest-plan.json"
             self.codex_cmd(
-                "codex-ingest-plan",
+                f"{batch_prefix}-codex-ingest-plan",
                 self.make_plan_prompt(queue_payload, meeting_payload),
                 plan_path,
                 "actions",
+                artifact_dir=artifact_dir,
             )
-            apply_raw = self.engine_cmd("apply-plan", "apply-plan", "--input", str(plan_path))
+            apply_raw = self.engine_cmd(
+                f"{batch_prefix}-apply-plan",
+                "apply-plan",
+                "--input",
+                str(plan_path),
+            )
             apply_result = json.loads(apply_raw)
-            write_json(self.run_dir / "apply-plan-result.json", apply_result)
+            write_json(artifact_dir / "apply-plan-result.json", apply_result)
 
-        summary_tasks_path = self.run_dir / "summary-tasks.json"
+        summary_tasks_path = artifact_dir / "summary-tasks.json"
         summary_paths = sorted(collect_targets(apply_result) | pending_queue_targets(self.vault))
         summary_payload: dict[str, Any] = {"tasks": []}
         if summary_paths:
             summary_args = ["summary-tasks", "--limit", str(self.summary_limit)]
             for path in summary_paths:
                 summary_args.extend(["--path", path])
-            self.engine_cmd("summary-tasks", *summary_args, stdout_path=summary_tasks_path)
+            self.engine_cmd(
+                f"{batch_prefix}-summary-tasks",
+                *summary_args,
+                stdout_path=summary_tasks_path,
+            )
             summary_payload = read_json(summary_tasks_path)
         else:
             write_json(summary_tasks_path, summary_payload)
+
         summary_count = count_tasks(summary_payload)
         summary_result: dict[str, Any] = {"updated": [], "skipped": []}
         if summary_count:
-            summaries_path = self.run_dir / "summaries.json"
+            summaries_path = artifact_dir / "summaries.json"
             self.codex_cmd(
-                "codex-summaries",
+                f"{batch_prefix}-codex-summaries",
                 self.make_summary_prompt(summary_payload),
                 summaries_path,
                 "summaries",
+                artifact_dir=artifact_dir,
             )
-            summary_raw = self.engine_cmd("apply-summaries", "apply-summaries", "--input", str(summaries_path))
+            summary_raw = self.engine_cmd(
+                f"{batch_prefix}-apply-summaries",
+                "apply-summaries",
+                "--input",
+                str(summaries_path),
+            )
             summary_result = json.loads(summary_raw)
-            write_json(self.run_dir / "apply-summaries-result.json", summary_result)
+            write_json(artifact_dir / "apply-summaries-result.json", summary_result)
 
-        finalize_raw = self.engine_cmd("finalize-queue", "finalize-queue")
+        finalize_raw = self.engine_cmd(f"{batch_prefix}-finalize-queue", "finalize-queue")
         finalize_result = json.loads(finalize_raw)
-        write_json(self.run_dir / "finalize-queue-result.json", finalize_result)
+        write_json(artifact_dir / "finalize-queue-result.json", finalize_result)
+
+        skipped = collect_skipped(apply_result, summary_result, finalize_result, summary_payload)
+        return {
+            "batch": batch,
+            "artifact_dir": str(artifact_dir),
+            "available_queue_tasks": fit_stats["original_queue_tasks"],
+            "available_meeting_tasks": fit_stats["original_meeting_tasks"],
+            "queue_tasks": queue_count,
+            "meeting_tasks": meeting_count,
+            "deferred_queue_tasks": fit_stats["deferred_queue_tasks"],
+            "deferred_meeting_tasks": fit_stats["deferred_meeting_tasks"],
+            "ingest_plan_prompt_chars": fit_stats["prompt_chars"],
+            "summary_tasks": summary_count,
+            "processed_files": sorted(collect_sources(apply_result)),
+            "target_notes": sorted(collect_targets(apply_result)),
+            "summary_updated": sorted(str(path) for path in summary_result.get("updated", [])),
+            "deleted_queue_notes": list(finalize_result.get("deleted", [])),
+            "skipped_items": skipped,
+            "review_required": skipped[:],
+        }
+
+    def run(self) -> dict[str, Any]:
+        self.preflight()
+        before_files = knowledge_files(self.vault)
+
+        batch_results: list[dict[str, Any]] = []
+        processed_files: set[str] = set()
+        target_notes: set[str] = set()
+        summary_updated: set[str] = set()
+        deleted_queue_notes: set[str] = set()
+        skipped: list[dict[str, Any]] = []
+        review_required: list[dict[str, Any]] = []
+
+        for batch in range(1, self.max_run_batches + 1):
+            batch_result = self.run_batch(batch)
+            batch_results.append(batch_result)
+
+            processed_files.update(batch_result["processed_files"])
+            target_notes.update(batch_result["target_notes"])
+            summary_updated.update(batch_result["summary_updated"])
+            deleted_queue_notes.update(batch_result["deleted_queue_notes"])
+            skipped.extend(batch_result["skipped_items"])
+            review_required.extend(batch_result["review_required"])
+
+            made_progress = any(
+                [
+                    batch_result["queue_tasks"],
+                    batch_result["meeting_tasks"],
+                    batch_result["summary_tasks"],
+                    batch_result["deleted_queue_notes"],
+                ]
+            )
+            if not made_progress:
+                break
 
         after_files = knowledge_files(self.vault)
         created_notes = sorted(after_files - before_files)
-        target_notes = collect_targets(apply_result)
-        summary_updated = set(summary_result.get("updated", []))
         updated_notes = sorted((target_notes | summary_updated) - set(created_notes))
-        skipped = collect_skipped(apply_result, summary_result, finalize_result, summary_payload)
-        review_required = skipped[:]
+        last_batch = batch_results[-1] if batch_results else {}
 
         result = {
             "status": "success",
@@ -339,28 +430,33 @@ class Runner:
             "vault": str(self.vault),
             "log_path": str(self.log_path),
             "counts": {
-                "queue_tasks": queue_count,
-                "meeting_tasks": meeting_count,
-                "available_queue_tasks": fit_stats["original_queue_tasks"],
-                "available_meeting_tasks": fit_stats["original_meeting_tasks"],
-                "deferred_queue_tasks": fit_stats["deferred_queue_tasks"],
-                "deferred_meeting_tasks": fit_stats["deferred_meeting_tasks"],
-                "ingest_plan_prompt_chars": fit_stats["prompt_chars"],
-                "summary_tasks": summary_count,
-                "processed_files": len(collect_sources(apply_result)),
+                "batches": len(batch_results),
+                "queue_tasks": sum(item["queue_tasks"] for item in batch_results),
+                "meeting_tasks": sum(item["meeting_tasks"] for item in batch_results),
+                "available_queue_tasks": sum(item["available_queue_tasks"] for item in batch_results),
+                "available_meeting_tasks": sum(item["available_meeting_tasks"] for item in batch_results),
+                "deferred_queue_tasks": int(last_batch.get("deferred_queue_tasks", 0)),
+                "deferred_meeting_tasks": int(last_batch.get("deferred_meeting_tasks", 0)),
+                "ingest_plan_prompt_chars": int(last_batch.get("ingest_plan_prompt_chars", 0)),
+                "ingest_plan_prompt_chars_total": sum(
+                    item["ingest_plan_prompt_chars"] for item in batch_results
+                ),
+                "summary_tasks": sum(item["summary_tasks"] for item in batch_results),
+                "processed_files": len(processed_files),
                 "created_notes": len(created_notes),
                 "updated_notes": len(updated_notes),
-                "deleted_queue_notes": len(finalize_result.get("deleted", [])),
+                "deleted_queue_notes": len(deleted_queue_notes),
                 "skipped_items": len(skipped),
                 "review_required": len(review_required),
                 "errors": 0,
             },
-            "processed_files": sorted(collect_sources(apply_result)),
+            "processed_files": sorted(processed_files),
             "created_notes": created_notes,
             "updated_notes": updated_notes,
-            "deleted_queue_notes": finalize_result.get("deleted", []),
+            "deleted_queue_notes": sorted(deleted_queue_notes),
             "skipped_items": skipped,
             "review_required": review_required,
+            "batch_summaries": batch_results,
             "errors": [],
         }
         result["summary_uk"] = ukrainian_summary(result)
@@ -511,6 +607,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--queue-limit", type=int, default=int(os.environ.get("QUEUE_LIMIT", "10")))
     parser.add_argument("--meeting-limit", type=int, default=int(os.environ.get("MEETING_LIMIT", "10")))
     parser.add_argument("--summary-limit", type=int, default=int(os.environ.get("SUMMARY_LIMIT", "50")))
+    parser.add_argument(
+        "--max-run-batches",
+        type=int,
+        default=int(os.environ.get("MAX_RUN_BATCHES", str(DEFAULT_MAX_RUN_BATCHES))),
+    )
     parser.add_argument("--timeout", type=int, default=int(os.environ.get("RUNNER_STEP_TIMEOUT", "1800")))
     parser.add_argument(
         "--max-codex-prompt-chars",
