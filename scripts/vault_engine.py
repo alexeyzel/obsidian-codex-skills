@@ -881,6 +881,8 @@ def summary_source(text: str, spec: VaultSpec) -> str:
 def render_template(template: str, values: dict[str, str]) -> str:
     rendered = template
     for key, value in values.items():
+        rendered = re.sub(r"\{\{\s*" + re.escape(key) + r"\s*\}\}", value, rendered)
+    for key, value in values.items():
         rendered = rendered.replace("{" + key + "}", value)
     return rendered
 
@@ -909,11 +911,11 @@ def default_meeting_template(spec: VaultSpec) -> str:
     return (
         "---\n"
         "type: meeting\n"
-        "date: {date}\n"
-        "calendar_title: {calendar_title}\n"
+        'date: "{{date}}"\n'
+        'calendar_title: "{calendar_title}"\n'
         "agent_processed: false\n"
         "---\n"
-        "# {date} - {title}\n\n"
+        "# {{date}} - {title}\n\n"
         f"## {summary.heading}\n{summary.placeholder}\n\n"
         f"## {before}\n-\n\n"
         f"## {notes}\n-\n\n"
@@ -1794,6 +1796,12 @@ def cmd_apply_meeting_prep(args: argparse.Namespace) -> int:
             "agent_summary": summary,
         },
     )
+    fm, body = parse_frontmatter(rendered)
+    fm["type"] = "meeting"
+    fm["date"] = meeting_date
+    fm["calendar_title"] = calendar_title
+    fm["agent_processed"] = False
+    rendered = format_frontmatter(fm) + body.lstrip("\n")
     write_text(target, rendered.rstrip() + "\n")
     append_log(vault, spec, f"MEETING_PREP created={target_rel}")
     print(json.dumps({"created": target_rel}, ensure_ascii=False, indent=2))

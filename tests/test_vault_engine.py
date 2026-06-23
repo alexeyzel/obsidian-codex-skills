@@ -597,6 +597,9 @@ class VaultEngineTests(unittest.TestCase):
             self.run_engine(vault, "init", "--config", str(local_config))
 
             meeting_template = (vault / "Service" / "Templates" / "meeting.md").read_text(encoding="utf-8")
+            self.assertIn('date: "{{date}}"', meeting_template)
+            self.assertIn('calendar_title: "{calendar_title}"', meeting_template)
+            self.assertIn("# {{date}} - {title}", meeting_template)
             self.assertIn("## Brief\n{agent_summary}", meeting_template)
             self.assertIn("## Before Call\n-", meeting_template)
             self.assertIn("## Notes\n-", meeting_template)
@@ -606,6 +609,31 @@ class VaultEngineTests(unittest.TestCase):
 
             knowledge_template = (vault / "Service" / "Templates" / "person.md").read_text(encoding="utf-8")
             self.assertIn("## Context\n-", knowledge_template)
+
+    def test_meeting_prep_renders_obsidian_date_template_and_valid_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            payload_path = vault / "meeting-prep.json"
+            self.write_json(
+                payload_path,
+                {
+                    "target_path": "Meetings/2026-06-22 - DIA Support.md",
+                    "summary": "Remember the current DIA Support project status before the meeting.",
+                    "calendar_title": "DIA: Support",
+                    "date": "2026-06-22",
+                },
+            )
+
+            self.run_engine(vault, "apply-meeting-prep", "--input", str(payload_path))
+
+            meeting_text = (vault / "Meetings" / "2026-06-22 - DIA Support.md").read_text(encoding="utf-8")
+            self.assertIn("date: 2026-06-22", meeting_text)
+            self.assertIn('calendar_title: "DIA: Support"', meeting_text)
+            self.assertIn("# 2026-06-22 - DIA Support", meeting_text)
+            self.assertNotIn("{{date}}", meeting_text)
+            self.assertNotIn("{date}", meeting_text)
+            self.assertNotIn("{title}", meeting_text)
 
     def test_reinit_adds_new_type_without_removing_old_type_folder(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
