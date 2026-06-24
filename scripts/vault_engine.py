@@ -683,6 +683,11 @@ def append_agent_note(path: Path, reason: str) -> None:
     write_text(path, (format_frontmatter(fm) if fm else "") + body)
 
 
+def has_agent_note(text: str) -> bool:
+    _fm, body = parse_frontmatter(text)
+    return bool(section_pattern(AGENT_NOTE_HEADING).search(body))
+
+
 def build_dated_block(markdown: str, heading: str) -> str:
     markdown = normalize_markdown_block(markdown)
     return f"### {heading}\n{markdown}"
@@ -1276,6 +1281,8 @@ def cmd_queue_tasks(args: argparse.Namespace) -> int:
     queue = folder_path(vault, spec, "queue")
     tasks: list[dict[str, Any]] = []
     for source in sorted(queue.glob("*.md")) if queue.exists() else []:
+        if has_agent_note(read_text(source)):
+            continue
         tasks.append(build_source_task(vault, spec, source, source_kind="queue", source_policy="delete_after_success"))
         if len(tasks) >= args.limit:
             break
@@ -1503,6 +1510,11 @@ def apply_source_action(vault: Path, spec: VaultSpec, action: dict[str, Any], to
         compact_reason = reason or "skipped by LLM"
         if policy == "delete_after_success":
             append_agent_note(source, compact_reason)
+        elif policy == "keep_and_mark_processed":
+            meeting_text = read_text(source)
+            fm, body = parse_frontmatter(meeting_text)
+            fm["agent_processed"] = True
+            write_text(source, format_frontmatter(fm) + body.lstrip("\n"))
         return None, [{"source": source_rel, "reason": compact_reason}]
 
     if policy == "keep_and_mark_processed":

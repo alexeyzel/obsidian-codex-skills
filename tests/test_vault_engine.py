@@ -384,6 +384,23 @@ class VaultEngineTests(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertIn("## Agent note", source.read_text(encoding="utf-8"))
 
+    def test_queue_source_with_agent_note_is_not_reprocessed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Inbox" / "Queue" / "Needs review.md"
+            source.write_text(
+                "# Needs review\n\n"
+                "- Ambiguous material.\n\n"
+                "## Agent note\n"
+                "2026-06-24T00:00:00+00:00 skipped: not enough context\n",
+                encoding="utf-8",
+            )
+
+            tasks = self.run_engine(vault, "queue-tasks", "--limit", "10")
+
+            self.assertEqual(tasks["tasks"], [])
+
     def test_meeting_source_fills_summary_and_marks_processed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             vault = Path(temp)
@@ -441,6 +458,44 @@ class VaultEngineTests(unittest.TestCase):
             self.assertIn("Discussed Alpha Project ownership", meeting_text)
             self.assertNotIn("{agent_summary}", meeting_text)
             self.assertTrue((vault / "Knowledge" / "Projects" / "Alpha Project.md").exists())
+
+    def test_skipped_meeting_source_is_marked_processed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            vault = Path(temp)
+            self.run_engine(vault, "init")
+            source = vault / "Meetings" / "2026-06-21 - Empty.md"
+            source.write_text(
+                "---\n"
+                "type: meeting\n"
+                "date: 2026-06-21\n"
+                "calendar_title: Empty\n"
+                "agent_processed: false\n"
+                "---\n"
+                "# 2026-06-21 - Empty\n\n"
+                "## Summary\n"
+                "{agent_summary}\n",
+                encoding="utf-8",
+            )
+            plan_file = vault / "meeting-skip-plan.json"
+            self.write_json(
+                plan_file,
+                {
+                    "actions": [
+                        {
+                            "kind": "source",
+                            "source": "Meetings/2026-06-21 - Empty.md",
+                            "source_policy": "keep_and_mark_processed",
+                            "coverage": "skipped",
+                            "reason": "no durable knowledge",
+                            "updates": [],
+                        }
+                    ]
+                },
+            )
+
+            self.run_engine(vault, "apply-plan", "--input", str(plan_file))
+
+            self.assertIn("agent_processed: true", source.read_text(encoding="utf-8"))
 
     def test_language_policy_is_emitted_for_summary_and_meeting_prep(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

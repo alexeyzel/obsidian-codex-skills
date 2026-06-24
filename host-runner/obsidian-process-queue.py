@@ -409,9 +409,9 @@ class Runner:
 
             made_progress = any(
                 [
-                    batch_result["queue_tasks"],
-                    batch_result["meeting_tasks"],
-                    batch_result["summary_tasks"],
+                    batch_result["processed_files"],
+                    batch_result["target_notes"],
+                    batch_result["summary_updated"],
                     batch_result["deleted_queue_notes"],
                 ]
             )
@@ -421,6 +421,8 @@ class Runner:
         after_files = knowledge_files(self.vault)
         created_notes = sorted(after_files - before_files)
         updated_notes = sorted((target_notes | summary_updated) - set(created_notes))
+        skipped = unique_review_items(skipped)
+        review_required = unique_review_items(review_required)
         last_batch = batch_results[-1] if batch_results else {}
 
         result = {
@@ -584,6 +586,17 @@ def collect_skipped(*payloads: dict[str, Any]) -> list[dict[str, Any]]:
         if isinstance(task, dict) and task.get("kind") == "summary_error":
             skipped.append({"path": task.get("path", ""), "reason": task.get("error", "summary error")})
     return skipped
+
+
+def unique_review_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("source") or item.get("path") or item.get("target") or item.get("reason") or item)
+        if key not in unique:
+            unique[key] = item
+    return list(unique.values())
 
 
 def ukrainian_summary(result: dict[str, Any]) -> str:
