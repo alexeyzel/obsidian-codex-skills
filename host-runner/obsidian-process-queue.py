@@ -193,6 +193,7 @@ class Runner:
             "Each action must follow the action_schema from the task payloads. "
             "Process queue sources with source_policy delete_after_success. "
             "Process meeting sources with source_policy keep_and_mark_processed. "
+            "Use coverage skipped when a source contains no durable knowledge to transfer. "
             "Do not do internet research. Preserve existing source wikilinks in notes_markdown. "
             "If you paraphrase source text, keep source wikilinks on the corresponding names and "
             "set preserve_links for source wikilinks that must remain connected to each update. "
@@ -494,7 +495,7 @@ def validate_codex_payload(payload: dict[str, Any], expected_key: str) -> None:
                 raise ValueError(f"actions[{idx}] is missing source")
             if action.get("source_policy") not in {"delete_after_success", "keep_and_mark_processed"}:
                 raise ValueError(f"actions[{idx}] has invalid source_policy")
-            if action.get("coverage") not in {"complete", "partial", "none"}:
+            if action.get("coverage") not in {"complete", "partial", "skipped", "none"}:
                 raise ValueError(f"actions[{idx}] has invalid coverage")
             if not isinstance(action.get("updates", []), list):
                 raise ValueError(f"actions[{idx}].updates is not a list")
