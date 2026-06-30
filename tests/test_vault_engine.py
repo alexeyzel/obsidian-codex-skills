@@ -444,7 +444,7 @@ class VaultEngineTests(unittest.TestCase):
                                     "decision": "create_new",
                                     "target_title": "Alpha Project",
                                     "type": "project",
-                                    "notes_markdown": "- Needs a delivery plan and owner.",
+                                    "notes_markdown": "### [[Meetings/2026-06-21 - Sync]]\n- Needs a delivery plan and owner.",
                                 }
                             ],
                         }
@@ -457,7 +457,9 @@ class VaultEngineTests(unittest.TestCase):
             self.assertIn("agent_processed: true", meeting_text)
             self.assertIn("Discussed Alpha Project ownership", meeting_text)
             self.assertNotIn("{agent_summary}", meeting_text)
-            self.assertTrue((vault / "Knowledge" / "Projects" / "Alpha Project.md").exists())
+            target_text = (vault / "Knowledge" / "Projects" / "Alpha Project.md").read_text(encoding="utf-8")
+            self.assertEqual(target_text.count("### [[Meetings/2026-06-21 - Sync]]"), 1)
+            self.assertIn("- Needs a delivery plan and owner.", target_text)
 
     def test_skipped_meeting_source_is_marked_processed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

@@ -688,8 +688,25 @@ def has_agent_note(text: str) -> bool:
     return bool(section_pattern(AGENT_NOTE_HEADING).search(body))
 
 
+def strip_leading_duplicate_heading(markdown: str, heading: str) -> str:
+    lines = markdown.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    idx = 0
+    while idx < len(lines) and not lines[idx].strip():
+        idx += 1
+    if idx >= len(lines):
+        return ""
+    match = re.match(r"^\s*#{1,6}\s+(.+?)\s*$", lines[idx])
+    if not match or match.group(1).strip() != heading.strip():
+        return markdown
+    del lines[idx]
+    while idx < len(lines) and not lines[idx].strip():
+        del lines[idx]
+    return normalize_markdown_block("\n".join(lines))
+
+
 def build_dated_block(markdown: str, heading: str) -> str:
     markdown = normalize_markdown_block(markdown)
+    markdown = strip_leading_duplicate_heading(markdown, heading)
     return f"### {heading}\n{markdown}"
 
 
